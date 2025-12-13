@@ -6,7 +6,8 @@ const swaggerDefinition: SwaggerDefinition = {
   info: {
     title: "Assistente Jurídico API",
     version: "1.0.0",
-    description: "API REST para gerenciamento de documentos da Base de Conhecimento",
+    description:
+      "API REST para gerenciamento de documentos da Base de Conhecimento",
     contact: {
       name: "Assistente Jurídico",
     },
@@ -25,6 +26,10 @@ const swaggerDefinition: SwaggerDefinition = {
     {
       name: "Documents",
       description: "Endpoints para gerenciamento de documentos (CRUD)",
+    },
+    {
+      name: "Chat",
+      description: "Endpoints para comunicação com o assistente jurídico (LLM)",
     },
   ],
   components: {
@@ -61,7 +66,13 @@ const swaggerDefinition: SwaggerDefinition = {
             example: "2025-12-12T20:00:00.000Z",
           },
         },
-        required: ["id", "titulo", "caminho_arquivo", "status_indexacao", "criado_em"],
+        required: [
+          "id",
+          "titulo",
+          "caminho_arquivo",
+          "status_indexacao",
+          "criado_em",
+        ],
       },
       CreateDocumentDto: {
         type: "object",
@@ -141,6 +152,57 @@ const swaggerDefinition: SwaggerDefinition = {
           },
         },
       },
+      ChatMessageRequest: {
+        type: "object",
+        required: ["message"],
+        properties: {
+          message: {
+            type: "string",
+            description: "Mensagem do usuário para o assistente jurídico",
+            example: "Qual é a definição de Habeas Corpus?",
+            maxLength: 2000,
+          },
+        },
+      },
+      ChatMessageResponse: {
+        type: "object",
+        properties: {
+          message: {
+            type: "string",
+            description: "Mensagem original do usuário",
+            example: "Qual é a definição de Habeas Corpus?",
+          },
+          response: {
+            type: "string",
+            description: "Resposta gerada pelo modelo de linguagem",
+            example:
+              "Habeas Corpus é um remédio constitucional que garante o direito de liberdade...",
+          },
+          timestamp: {
+            type: "string",
+            format: "date-time",
+            description: "Data e hora da resposta",
+            example: "2025-12-13T10:30:00.000Z",
+          },
+        },
+        required: ["message", "response", "timestamp"],
+      },
+      ErrorResponse: {
+        type: "object",
+        properties: {
+          error: {
+            type: "string",
+            description: "Mensagem de erro",
+            example: "Erro interno do servidor",
+          },
+          message: {
+            type: "string",
+            description: "Detalhes adicionais do erro (opcional)",
+            example: "Erro ao comunicar com o modelo de linguagem",
+          },
+        },
+        required: ["error"],
+      },
     },
   },
 };
@@ -151,4 +213,3 @@ const options = {
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
-

@@ -1,5 +1,5 @@
 import prisma from "../lib/prisma";
-import { BaseDeConhecimento, StatusIndexacao, Prisma } from "@prisma/client";
+import { BaseDeConhecimento, StatusIndexacao } from "@prisma/client";
 
 export class DocumentRepository {
   async create(data: {

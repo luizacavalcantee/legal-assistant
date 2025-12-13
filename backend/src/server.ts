@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
 import documentRoutes from "./routes/documentRoutes";
+import chatRoutes from "./routes/chatRoutes";
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Rotas da API
 app.use("/documents", documentRoutes);
+app.use("/chat", chatRoutes);
 
 // Iniciar servidor
 app.listen(PORT, () => {
@@ -58,6 +60,9 @@ app.listen(PORT, () => {
   console.log(`📍 Health check disponível em http://localhost:${PORT}/health`);
   console.log(
     `📄 Documentos API disponível em http://localhost:${PORT}/documents`
+  );
+  console.log(
+    `💬 Chat API disponível em http://localhost:${PORT}/chat/message`
   );
   console.log(`📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`);
 });
