@@ -105,6 +105,8 @@ Isso iniciará:
 - **PostgreSQL** na porta `5432`
 - **Qdrant** nas portas `6333` (HTTP) e `6334` (gRPC)
 
+> 💡 **Nota:** O backend roda localmente (não no Docker) para facilitar desenvolvimento e hot-reload. Apenas PostgreSQL e Qdrant rodam no Docker.
+
 ### 6. Configurar Banco de Dados
 
 ```bash
@@ -197,11 +199,10 @@ curl http://localhost:6333/
 
 ### Docker
 
-```bash
-# Subir todos os serviços
-docker-compose up -d
+> 💡 **Nota:** Apenas PostgreSQL e Qdrant rodam no Docker. Backend e Frontend rodam localmente.
 
-# Subir apenas PostgreSQL e Qdrant
+```bash
+# Subir PostgreSQL e Qdrant (serviços necessários)
 docker-compose up -d postgres qdrant
 
 # Parar serviços
@@ -214,8 +215,12 @@ docker-compose logs -f
 docker-compose logs -f qdrant
 docker-compose logs -f postgres
 
-# Parar e remover volumes (apaga dados)
+# Parar e remover volumes (apaga dados - cuidado!)
 docker-compose down -v
+
+# Reiniciar um serviço específico
+docker-compose restart qdrant
+docker-compose restart postgres
 ```
 
 ### Prisma
@@ -259,14 +264,30 @@ cd frontend && npm run build
 
 ### Problema: Porta 3000 já está em uso
 
-```bash
-# Windows PowerShell - Encontrar e encerrar processo
-Get-NetTCPConnection -LocalPort 3000 | Select-Object OwningProcess
-Stop-Process -Id <PID> -Force
+**Windows PowerShell:**
 
-# Ou parar container Docker
-docker stop assistente-backend
+```powershell
+Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object {
+    $processId = $_.OwningProcess
+    Stop-Process -Id $processId -Force
+    Write-Host "Processo $processId encerrado"
+}
 ```
+
+**Linux/Mac:**
+
+```bash
+lsof -ti:3000 | xargs kill -9
+```
+
+**Ou parar container Docker (se estiver rodando):**
+
+```bash
+docker stop assistente-backend
+docker-compose down
+```
+
+> 💡 **Dica:** Se você estiver usando Docker para o backend, pare o container antes de rodar localmente: `docker-compose down`
 
 ### Problema: Qdrant não conecta
 

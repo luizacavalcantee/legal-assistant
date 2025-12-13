@@ -30,30 +30,32 @@ services:
     networks:
       - assistente-network
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: assistente-backend
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/assistente-db?schema=public
-      - PORT=3000
-      - QDRANT_URL=http://qdrant:6333
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-    networks:
-      - assistente-network
-    command: sh -c "npm run prisma:generate && npm run prisma:migrate && npm run dev"
-    restart: unless-stopped
+  # Backend roda localmente (não no Docker) para facilitar desenvolvimento
+  # Descomente apenas se quiser rodar o backend no Docker também
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: assistente-backend
+  #   environment:
+  #     - NODE_ENV=development
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/assistente-db?schema=public
+  #     - PORT=3000
+  #     - QDRANT_URL=http://qdrant:6333
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./backend:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     qdrant:
+  #       condition: service_started
+  #   networks:
+  #     - assistente-network
+  #   command: sh -c "npm run prisma:generate && npm run prisma:migrate && npm run dev"
+  #   restart: unless-stopped
 
 volumes:
   postgres_data:

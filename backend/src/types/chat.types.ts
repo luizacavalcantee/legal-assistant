@@ -6,6 +6,13 @@ export interface ChatMessageResponse {
   message: string;
   response: string;
   timestamp: string;
+  sources?: Array<{
+    document_id: string;
+    titulo: string;
+    chunk_index: number;
+    score: number;
+    text: string;
+  }>;
 }
 
 export interface ChatErrorResponse {
