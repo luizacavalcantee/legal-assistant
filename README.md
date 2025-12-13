@@ -188,15 +188,18 @@ curl http://localhost:6333/
   - ✅ Status de indexação em tempo real (PENDENTE → INDEXADO/ERRO)
   - ✅ **Chat com RAG:** Busca semântica e respostas contextualizadas usando LangChain.js
   - ✅ Retorno de fontes dos documentos utilizados nas respostas
+  - ✅ **Status de Indexação:** Visualização clara do status com atualização automática em tempo real
 
 ### 🎯 Como Usar o Chat com RAG
 
 1. **Indexe documentos primeiro:**
+
    - Acesse a página "Gestão da Base de Conhecimento"
    - Faça upload de documentos (PDF, TXT, MD)
    - Aguarde o status mudar para "INDEXADO"
 
 2. **Use o chat:**
+
    - Acesse a página de Chat
    - Faça perguntas sobre os documentos indexados
    - A IA buscará informações relevantes e responderá com base nos documentos
@@ -206,6 +209,7 @@ curl http://localhost:6333/
    - As fontes mostram título, score de similaridade e trecho usado
 
 ### 🚧 Em Desenvolvimento
+
 - Histórico de conversas persistente
 - Autenticação e autorização
 - Reindexação automática de documentos atualizados
@@ -348,17 +352,20 @@ NODE_OPTIONS=--max-old-space-size=8192
 ### Problema: Chat não usa RAG (responde sem contexto dos documentos)
 
 1. **Verifique se há documentos indexados:**
+
    ```bash
    curl http://localhost:6333/collections/knowledge_base | jq '.result.points_count'
    # Deve retornar um número > 0
    ```
 
 2. **Verifique se Qdrant está rodando:**
+
    ```bash
    docker ps --filter name=assistente-qdrant
    ```
 
 3. **Verifique logs do backend:**
+
    - Deve aparecer: `✅ RAG Chain Service inicializado com sucesso`
    - Se aparecer: `⚠️ Chat funcionará sem RAG`, verifique `QDRANT_URL` no `.env`
 
@@ -390,6 +397,7 @@ NODE_OPTIONS=--max-old-space-size=8192
 
 - **Etapa 6 - RAG e Banco Vetorial:** [`DOCUMENTACAO_ETAPA_6_RAG.md`](./DOCUMENTACAO_ETAPA_6_RAG.md) - Documentação completa da implementação RAG
 - **Etapa 7 - Chat com RAG:** [`DOCUMENTACAO_ETAPA_7_RAG_CHAT.md`](./DOCUMENTACAO_ETAPA_7_RAG_CHAT.md) - Documentação da integração RAG no chat usando LangChain.js
+- **Etapa 8 - Status de Indexação:** [`DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md`](./DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md) - Documentação da visualização e atualização automática do status de indexação
 - **Swagger/API Docs:** http://localhost:3000/api-docs - Documentação interativa da API
 
 ## 🛠️ Tecnologias
