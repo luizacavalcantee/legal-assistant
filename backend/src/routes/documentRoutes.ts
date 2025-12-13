@@ -13,34 +13,73 @@ const router = Router();
 // Inicializar dependências (padrão de injeção de dependências)
 const repository = new DocumentRepository();
 
-// Inicializar serviços de RAG (opcional - só se Qdrant estiver configurado)
-let indexingService: IndexingService | undefined;
-try {
-  const qdrantClient = getQdrantClient();
-  const embeddingService = new EmbeddingService();
-  const documentProcessor = new DocumentProcessor();
+// Variável compartilhada para IndexingService (será atualizada após inicialização)
+let indexingService: IndexingService | undefined = undefined;
 
-  // Inicializar coleção no Qdrant
-  qdrantClient.initializeCollection().catch((error) => {
-    console.warn("⚠️  Qdrant não disponível. Indexação vetorial desabilitada:", error.message);
-  });
+// Função para inicializar RAG
+async function initializeRAGServices(): Promise<void> {
+  if (!process.env.QDRANT_URL) {
+    console.warn("⚠️  QDRANT_URL não definido. Indexação vetorial desabilitada.");
+    return;
+  }
 
-  indexingService = new IndexingService(
-    qdrantClient,
-    embeddingService,
-    documentProcessor,
-    repository
-  );
-} catch (error: any) {
-  console.warn("⚠️  Serviços de RAG não inicializados:", error.message);
-  console.warn("   A indexação vetorial estará desabilitada.");
+  try {
+    console.log("🔧 Inicializando serviços de RAG...");
+    const qdrantClient = getQdrantClient();
+    const embeddingService = new EmbeddingService();
+    const documentProcessor = new DocumentProcessor();
+
+    // Inicializar coleção no Qdrant com timeout de 10 segundos
+    try {
+      const initPromise = qdrantClient.initializeCollection();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout ao inicializar Qdrant (10s)")), 10000)
+      );
+      
+      await Promise.race([initPromise, timeoutPromise]);
+      console.log("✅ Qdrant inicializado com sucesso");
+      
+      indexingService = new IndexingService(
+        qdrantClient,
+        embeddingService,
+        documentProcessor,
+        repository
+      );
+      console.log("✅ Serviços de RAG inicializados com sucesso");
+    } catch (initError: any) {
+      console.error("❌ Erro ao inicializar Qdrant:", initError.message);
+      console.error("   Detalhes:", initError);
+      console.warn("⚠️  Indexação vetorial desabilitada. Verifique se o Qdrant está rodando.");
+      console.warn(`   URL configurada: ${process.env.QDRANT_URL}`);
+      indexingService = undefined;
+    }
+  } catch (error: any) {
+    console.error("❌ Erro ao inicializar serviços de RAG:", error.message);
+    console.error("   Stack:", error.stack);
+    console.warn("⚠️  A indexação vetorial estará desabilitada.");
+    indexingService = undefined;
+  }
 }
 
-const service = new DocumentService(repository, indexingService);
+// Criar DocumentService com getter que verifica a variável compartilhada
+const service = new DocumentService(repository, undefined);
+// Substituir o getter do indexingService para verificar a variável compartilhada
+Object.defineProperty(service, 'indexingService', {
+  get: () => indexingService,
+  set: (value) => { indexingService = value; },
+  enumerable: true,
+  configurable: true
+});
+
 const controller = new DocumentController(service);
 
+// Inicializar RAG em background (não bloqueia o carregamento do módulo)
+initializeRAGServices().catch((error) => {
+  console.error("❌ Erro fatal ao inicializar RAG:", error);
+  indexingService = undefined;
+});
+
 // Rotas
-// POST com upload de arquivo (multipart/form-data)
 router.post("/", (req, res, next) => {
   uploadSingle(req, res, (err) => {
     if (err) {
@@ -60,4 +99,3 @@ router.put("/:id", (req, res) => controller.update(req, res));
 router.delete("/:id", (req, res) => controller.delete(req, res));
 
 export default router;
-

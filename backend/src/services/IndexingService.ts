@@ -34,62 +34,101 @@ export class IndexingService {
     titulo: string
   ): Promise<void> {
     try {
-      console.log(`📄 Iniciando indexação do documento: ${titulo}`);
+      console.log(`📄 Iniciando indexação do documento: ${titulo} (ID: ${documentId})`);
+      console.log(`   📁 Arquivo: ${filePath}`);
 
       // 1. Processar documento (ler e fazer chunking)
-      const chunks = await this.documentProcessor.processDocument(filePath);
-      console.log(`✂️  Documento dividido em ${chunks.length} chunks`);
+      console.log(`   🔍 Lendo e processando arquivo...`);
+      let chunks;
+      try {
+        chunks = await this.documentProcessor.processDocument(filePath);
+        console.log(`✂️  Documento dividido em ${chunks.length} chunks`);
+      } catch (error: any) {
+        console.error(`❌ Erro ao processar documento: ${error.message}`);
+        console.error(`   Stack: ${error.stack}`);
+        throw error;
+      }
 
       if (chunks.length === 0) {
         throw new Error("Nenhum chunk gerado do documento");
       }
 
-      // 2. Gerar embeddings para todos os chunks (batch)
-      console.log(`🔢 Gerando embeddings para ${chunks.length} chunks...`);
-      const embeddings = await this.embeddingService.generateEmbeddings(
-        chunks.map((chunk) => chunk.text)
-      );
-
-      if (embeddings.length !== chunks.length) {
-        throw new Error(
-          `Número de embeddings (${embeddings.length}) não corresponde ao número de chunks (${chunks.length})`
-        );
+      // Limitar número máximo de chunks para evitar problemas de memória
+      const maxChunks = 1000;
+      if (chunks.length > maxChunks) {
+        console.warn(`⚠️  Documento tem ${chunks.length} chunks. Limitando a ${maxChunks} para evitar problemas de memória.`);
+        chunks.splice(maxChunks);
       }
 
-      // 3. Inserir pontos no Qdrant
-      console.log(`💾 Salvando ${chunks.length} pontos no Qdrant...`);
-      const points = chunks.map((chunk, index) => ({
-        id: `${documentId}-${chunk.index}`, // ID único: documentId-chunkIndex
-        vector: embeddings[index],
-        payload: {
-          text: chunk.text,
-          document_id: documentId,
-          chunk_index: chunk.index,
-          titulo: titulo,
-        },
-      }));
+      // 2. Processar em lotes menores para economizar memória
+      const embeddingBatchSize = 20; // Processar 20 chunks por vez
+      const qdrantBatchSize = 10; // Inserir 10 pontos por vez no Qdrant
+      
+      console.log(`🔢 Processando embeddings em lotes de ${embeddingBatchSize}...`);
 
-      // Inserir em lotes para melhor performance
-      const batchSize = 10;
-      for (let i = 0; i < points.length; i += batchSize) {
-        const batch = points.slice(i, i + batchSize);
-        await Promise.all(
-          batch.map((point) =>
-            this.qdrantClient.upsertPoint(
-              point.id,
-              point.vector,
-              point.payload
+      // Processar chunks em lotes
+      for (let i = 0; i < chunks.length; i += embeddingBatchSize) {
+        const batchEnd = Math.min(i + embeddingBatchSize, chunks.length);
+        const batch = chunks.slice(i, batchEnd);
+        const batchNumber = Math.floor(i / embeddingBatchSize) + 1;
+        const totalBatches = Math.ceil(chunks.length / embeddingBatchSize);
+        
+        console.log(`🔢 Processando lote ${batchNumber}/${totalBatches} (chunks ${i + 1}-${batchEnd})...`);
+
+        // Gerar embeddings para este lote
+        console.log(`   🔢 Gerando embeddings para lote ${batchNumber}...`);
+        const batchTexts = batch.map((chunk) => chunk.text);
+        const embeddings = await this.embeddingService.generateEmbeddings(batchTexts);
+        console.log(`   ✅ ${embeddings.length} embeddings gerados`);
+
+        if (embeddings.length !== batch.length) {
+          throw new Error(
+            `Número de embeddings (${embeddings.length}) não corresponde ao número de chunks no lote (${batch.length})`
+          );
+        }
+
+        // Inserir pontos no Qdrant em sub-lotes
+        for (let j = 0; j < batch.length; j += qdrantBatchSize) {
+          const qdrantBatch = batch.slice(j, j + qdrantBatchSize);
+          const qdrantEmbeddings = embeddings.slice(j, j + qdrantBatchSize);
+
+          const points = qdrantBatch.map((chunk, idx) => ({
+            id: `${documentId}-${chunk.index}`,
+            vector: qdrantEmbeddings[idx],
+            payload: {
+              text: chunk.text,
+              document_id: documentId,
+              chunk_index: chunk.index,
+              titulo: titulo,
+            },
+          }));
+
+          // Inserir lote no Qdrant
+          console.log(`   💾 Inserindo ${points.length} pontos no Qdrant...`);
+          await Promise.all(
+            points.map((point) =>
+              this.qdrantClient.upsertPoint(
+                point.id,
+                point.vector,
+                point.payload
+              )
             )
-          )
-        );
+          );
+          console.log(`   ✅ ${points.length} pontos inseridos no Qdrant`);
+        }
+
+        // Limpar memória entre lotes
+        if (global.gc && i % (embeddingBatchSize * 2) === 0) {
+          global.gc();
+        }
       }
 
-      // 4. Atualizar status no banco
+      // 3. Atualizar status no banco
       await this.repository.update(documentId, {
         status_indexacao: StatusIndexacao.INDEXADO,
       });
 
-      console.log(`✅ Documento indexado com sucesso: ${titulo}`);
+      console.log(`✅ Documento indexado com sucesso: ${titulo} (${chunks.length} chunks)`);
     } catch (error: any) {
       console.error(`❌ Erro ao indexar documento ${documentId}:`, error);
 

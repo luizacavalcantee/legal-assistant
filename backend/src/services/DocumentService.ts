@@ -9,7 +9,7 @@ import { IndexingService } from "./IndexingService";
 
 export class DocumentService {
   private repository: DocumentRepository;
-  private indexingService?: IndexingService;
+  public indexingService?: IndexingService; // Tornar público para permitir atualização
 
   constructor(
     repository: DocumentRepository,
@@ -35,14 +35,26 @@ export class DocumentService {
 
     // Indexar documento de forma assíncrona (não bloqueia a resposta)
     if (this.indexingService && filePath) {
+      console.log(`🚀 Iniciando indexação assíncrona do documento ${document.id}...`);
       this.indexingService
         .indexDocument(document.id, filePath, data.titulo)
+        .then(() => {
+          console.log(`✅ Indexação concluída para documento ${document.id}`);
+        })
         .catch((error) => {
           console.error(
-            `Erro ao indexar documento ${document.id} em background:`,
-            error
+            `❌ Erro ao indexar documento ${document.id} em background:`,
+            error.message
           );
+          console.error("   Stack:", error.stack);
         });
+    } else {
+      if (!this.indexingService) {
+        console.warn(`⚠️  IndexingService não disponível. Documento ${document.id} não será indexado.`);
+      }
+      if (!filePath) {
+        console.warn(`⚠️  Caminho do arquivo não fornecido. Documento ${document.id} não será indexado.`);
+      }
     }
 
     return this.mapToResponse(document);

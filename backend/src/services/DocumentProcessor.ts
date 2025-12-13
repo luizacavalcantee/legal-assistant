@@ -1,7 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import pdfParse from "pdf-parse";
 import dotenv from "dotenv";
+
+// pdf-parse versão 2.4.5 exporta PDFParse como classe
+const pdfParseModule = require("pdf-parse");
+const PDFParse = pdfParseModule.PDFParse;
 
 dotenv.config();
 
@@ -67,13 +70,90 @@ export class DocumentProcessor {
 
   /**
    * Lê conteúdo de um arquivo PDF
+   * Processa página por página para economizar memória
    */
   private async readPDF(filePath: string): Promise<string> {
+    let parser: any = null;
     try {
       const dataBuffer = fs.readFileSync(filePath);
-      const data = await pdfParse(dataBuffer);
-      return data.text;
+      
+      // Verificar tamanho do arquivo (limite reduzido para 30MB)
+      const fileSizeMB = dataBuffer.length / (1024 * 1024);
+      if (fileSizeMB > 30) {
+        throw new Error(`PDF muito grande (${fileSizeMB.toFixed(2)}MB). Limite: 30MB. Considere dividir o documento em partes menores.`);
+      }
+
+      console.log(`📄 Processando PDF de ${fileSizeMB.toFixed(2)}MB...`);
+
+      // PDFParse é uma classe, precisa ser instanciada
+      parser = new PDFParse({ 
+        data: dataBuffer,
+        verbosity: 0 // Reduzir verbosidade para economizar memória
+      });
+      
+      // Carregar documento primeiro para obter número de páginas
+      await parser.load();
+      const totalPages = parser.doc.numPages;
+      console.log(`📄 PDF tem ${totalPages} páginas. Processando página por página...`);
+      
+      // Processar página por página para economizar memória
+      const textParts: string[] = [];
+      const pagesPerBatch = 5; // Processar 5 páginas por vez
+      
+      for (let startPage = 1; startPage <= totalPages; startPage += pagesPerBatch) {
+        const endPage = Math.min(startPage + pagesPerBatch - 1, totalPages);
+        
+        console.log(`📄 Processando páginas ${startPage}-${endPage} de ${totalPages}...`);
+        
+        // Processar lote de páginas
+        const result = await parser.getText({
+          first: startPage,
+          last: endPage,
+          parseHyperlinks: false,
+          parsePageInfo: false,
+          pageJoiner: "\n"
+        });
+        
+        textParts.push(result.text);
+        
+        // Limpar memória entre lotes
+        if (global.gc && startPage % 10 === 0) {
+          global.gc();
+        }
+      }
+      
+      const fullText = textParts.join("\n\n");
+      
+      // Limpar parser
+      if (parser && typeof parser.destroy === 'function') {
+        try {
+          await parser.destroy();
+        } catch (e) {
+          // Ignorar erros na limpeza
+        }
+      }
+      parser = null;
+      
+      // Limpar arrays intermediários
+      textParts.length = 0;
+      
+      // Forçar garbage collection final
+      if (global.gc) {
+        global.gc();
+      }
+      
+      console.log(`✅ PDF processado com sucesso. Texto extraído: ${(fullText.length / 1024).toFixed(2)}KB`);
+      
+      return fullText;
     } catch (error: any) {
+      // Garantir limpeza mesmo em caso de erro
+      if (parser && typeof parser.destroy === 'function') {
+        try {
+          await parser.destroy();
+        } catch (e) {
+          // Ignorar erros na limpeza
+        }
+      }
       throw new Error(`Erro ao ler PDF: ${error.message}`);
     }
   }
@@ -128,16 +208,21 @@ O conteúdo real será processado quando os arquivos estiverem disponíveis no s
    * @returns Array de chunks
    */
   chunkText(text: string): Chunk[] {
-    const chunks: Chunk[] = [];
-    let startIndex = 0;
-    let chunkIndex = 0;
+    try {
+      console.log(`   🔧 Iniciando chunking do texto (${(text.length / 1024).toFixed(2)}KB)...`);
+      const chunks: Chunk[] = [];
+      let startIndex = 0;
+      let chunkIndex = 0;
 
-    // Limpar e normalizar texto
-    const cleanText = text
-      .replace(/\s+/g, " ")
-      .trim();
+      // Limpar e normalizar texto
+      console.log(`   🧹 Limpando e normalizando texto...`);
+      const cleanText = text
+        .replace(/\s+/g, " ")
+        .trim();
+      console.log(`   ✅ Texto limpo: ${(cleanText.length / 1024).toFixed(2)}KB`);
 
-    while (startIndex < cleanText.length) {
+      console.log(`   ✂️  Dividindo em chunks de ${this.chunkSize} caracteres...`);
+      while (startIndex < cleanText.length) {
       const endIndex = Math.min(
         startIndex + this.chunkSize,
         cleanText.length
@@ -158,7 +243,8 @@ O conteúdo real será processado quando os arquivos estiverem disponíveis no s
 
       const chunkText = cleanText.slice(startIndex, actualEndIndex).trim();
 
-      if (chunkText.length > 0) {
+      // Só adicionar chunk se tiver conteúdo e se avançou do índice anterior
+      if (chunkText.length > 0 && actualEndIndex > startIndex) {
         chunks.push({
           text: chunkText,
           index: chunkIndex,
@@ -168,12 +254,57 @@ O conteúdo real será processado quando os arquivos estiverem disponíveis no s
         chunkIndex++;
       }
 
-      // Avançar com overlap
-      startIndex = actualEndIndex - this.chunkOverlap;
-      if (startIndex < 0) startIndex = 0;
+      // Avançar com overlap - SEMPRE garantir que avança
+      const previousStart = startIndex;
+      
+      // Calcular próximo índice com overlap
+      let nextStart = actualEndIndex - this.chunkOverlap;
+      
+      // Se o próximo índice não avançou (ou voltou), avançar pelo menos metade do chunk
+      if (nextStart <= previousStart) {
+        nextStart = previousStart + Math.max(1, Math.floor(this.chunkSize / 2));
+      }
+      
+      startIndex = nextStart;
+      
+      // Proteção: se não avançou nada, forçar avanço mínimo
+      if (startIndex <= previousStart) {
+        startIndex = actualEndIndex;
+      }
+      
+      // Proteção adicional: garantir que não ultrapasse o tamanho do texto
+      if (startIndex >= cleanText.length) {
+        break;
+      }
+      
+      // Log de progresso a cada 50 chunks
+      if (chunkIndex % 50 === 0 && chunkIndex > 0) {
+        console.log(`   📊 Progresso: ${chunkIndex} chunks criados...`);
+      }
+      
+      // Proteção contra loop infinito: se criar mais de 10000 chunks, parar
+      if (chunkIndex > 10000) {
+        console.warn(`   ⚠️  Limite de 10000 chunks atingido. Parando chunking.`);
+        break;
+      }
+      
+      // Proteção adicional: se o startIndex não mudou após 2 iterações, forçar avanço
+      if (chunks.length >= 2 && 
+          chunks[chunks.length - 1].startChar === chunks[chunks.length - 2].startChar) {
+        startIndex = chunks[chunks.length - 1].endChar + 1;
+        if (startIndex >= cleanText.length) {
+          break;
+        }
+      }
     }
 
+    console.log(`   ✅ Chunking concluído: ${chunks.length} chunks criados`);
     return chunks;
+    } catch (error: any) {
+      console.error(`   ❌ Erro no chunking: ${error.message}`);
+      console.error(`   Stack: ${error.stack}`);
+      throw error;
+    }
   }
 
   /**
@@ -182,8 +313,18 @@ O conteúdo real será processado quando os arquivos estiverem disponíveis no s
    * @returns Array de chunks processados
    */
   async processDocument(filePath: string): Promise<Chunk[]> {
-    const content = await this.readFileContent(filePath);
-    return this.chunkText(content);
+    try {
+      console.log(`   📖 Lendo conteúdo do arquivo...`);
+      const content = await this.readFileContent(filePath);
+      console.log(`   ✅ Conteúdo lido: ${(content.length / 1024).toFixed(2)}KB`);
+      console.log(`   ✂️  Dividindo em chunks...`);
+      const chunks = this.chunkText(content);
+      console.log(`   ✅ ${chunks.length} chunks gerados`);
+      return chunks;
+    } catch (error: any) {
+      console.error(`   ❌ Erro ao processar documento: ${error.message}`);
+      throw error;
+    }
   }
 }
 

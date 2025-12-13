@@ -76,6 +76,14 @@ export class QdrantClient {
     }
   ): Promise<void> {
     try {
+      // Validar dimensão do vetor
+      const expectedDimension = parseInt(process.env.EMBEDDING_DIMENSION || "1536");
+      if (vector.length !== expectedDimension) {
+        throw new Error(
+          `Dimensão do vetor (${vector.length}) não corresponde à dimensão esperada (${expectedDimension})`
+        );
+      }
+
       // Converter id para número se for string numérica, senão usar hash
       let pointId: string | number;
       if (typeof id === "string" && /^\d+$/.test(id)) {
@@ -85,6 +93,11 @@ export class QdrantClient {
         pointId = this.stringToNumber(id);
       } else {
         pointId = id;
+      }
+
+      // Validar que o ID é um número válido
+      if (typeof pointId !== "number" || isNaN(pointId) || pointId < 0) {
+        throw new Error(`ID inválido gerado: ${pointId} (original: ${id})`);
       }
 
       await this.client.upsert(this.collectionName, {
@@ -99,21 +112,28 @@ export class QdrantClient {
       });
     } catch (error: any) {
       console.error("Erro ao inserir ponto no Qdrant:", error);
+      console.error(`   ID original: ${id}, ID convertido: ${typeof id === "string" ? this.stringToNumber(id) : id}`);
+      console.error(`   Dimensão do vetor: ${vector.length}`);
       throw new Error(`Falha ao inserir ponto no Qdrant: ${error.message}`);
     }
   }
 
   /**
    * Converte string para número (hash simples)
+   * Garante que o número seja positivo e dentro do range seguro do Qdrant
    */
   private stringToNumber(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
+      hash = ((hash << 5) - hash) + char;
       hash = hash & hash; // Convert to 32bit integer
     }
-    return Math.abs(hash);
+    // Garantir número positivo e evitar overflow
+    // Qdrant aceita números até 2^63-1, mas vamos usar um range mais seguro
+    const positiveHash = Math.abs(hash);
+    // Se o hash for muito grande, usar módulo para reduzir
+    return positiveHash % 2147483647; // Máximo seguro para 32-bit signed int
   }
 
   /**
