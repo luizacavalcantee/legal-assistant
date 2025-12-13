@@ -9,7 +9,15 @@ import {
 } from "./ui/table";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Loader2, Edit, Trash2, FileText, Download } from "lucide-react";
+import {
+  Loader2,
+  Edit,
+  Trash2,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+} from "lucide-react";
 
 interface DocumentTableProps {
   documents: Document[];
@@ -29,13 +37,33 @@ export function DocumentTable({
   const getStatusBadge = (status: StatusIndexacao) => {
     switch (status) {
       case StatusIndexacao.INDEXADO:
-        return <Badge variant="success">Indexado</Badge>;
+        return (
+          <Badge variant="success" className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3 w-3" />
+            Indexado
+          </Badge>
+        );
       case StatusIndexacao.PENDENTE:
-        return <Badge variant="warning">Pendente</Badge>;
+        return (
+          <Badge variant="warning" className="flex items-center gap-1.5">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Processando
+          </Badge>
+        );
       case StatusIndexacao.ERRO:
-        return <Badge variant="error">Erro</Badge>;
+        return (
+          <Badge variant="error" className="flex items-center gap-1.5">
+            <AlertCircle className="h-3 w-3" />
+            Erro na Indexação
+          </Badge>
+        );
       default:
-        return <Badge>{status}</Badge>;
+        return (
+          <Badge className="flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            {status}
+          </Badge>
+        );
     }
   };
 
@@ -81,7 +109,7 @@ export function DocumentTable({
           <TableRow>
             <TableHead>Título</TableHead>
             <TableHead>Caminho do Arquivo</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Status de Indexação</TableHead>
             <TableHead>Criado em</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>

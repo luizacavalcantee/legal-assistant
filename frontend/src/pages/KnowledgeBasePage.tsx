@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Document, CreateDocumentDto, UpdateDocumentDto } from "../types/document.types";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Document, CreateDocumentDto, UpdateDocumentDto, StatusIndexacao } from "../types/document.types";
 import { documentService } from "../services/api";
 import { DocumentTable } from "../components/DocumentTable";
 import { DocumentForm } from "../components/DocumentForm";
@@ -15,10 +15,13 @@ export function KnowledgeBasePage() {
   const [showForm, setShowForm] = useState(false);
   const [editingDocument, setEditingDocument] = useState<Document | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Carregar documentos
-  const loadDocuments = async () => {
-    setIsLoading(true);
+  // Carregar documentos (sem mostrar loading se já tiver documentos)
+  const loadDocuments = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const data = await documentService.getAll();
@@ -28,22 +31,57 @@ export function KnowledgeBasePage() {
         err.response?.data?.error || "Erro ao carregar documentos"
       );
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, []);
 
+  // Carregar documentos iniciais
   useEffect(() => {
     loadDocuments();
-  }, []);
+  }, [loadDocuments]);
+
+  // Polling automático quando há documentos pendentes
+  useEffect(() => {
+    // Verificar se há documentos pendentes
+    const hasPending = documents.some(
+      doc => doc.status_indexacao === StatusIndexacao.PENDENTE
+    );
+
+    if (hasPending) {
+      // Iniciar polling a cada 3 segundos
+      if (!pollingIntervalRef.current) {
+        pollingIntervalRef.current = setInterval(() => {
+          loadDocuments(false); // Não mostrar loading durante polling
+        }, 3000);
+      }
+    } else {
+      // Parar polling se não houver documentos pendentes
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    }
+
+    // Limpar polling ao desmontar componente ou quando documents mudar
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [documents, loadDocuments]);
 
   // Criar novo documento
   const handleCreate = async (data: CreateDocumentDto, file?: File) => {
     try {
       await documentService.create(data, file);
-      setSuccessMessage("Documento criado com sucesso!");
+      setSuccessMessage("Documento criado com sucesso! Aguardando indexação...");
       setShowForm(false);
       await loadDocuments();
-      setTimeout(() => setSuccessMessage(null), 3000);
+      // O polling será iniciado automaticamente pelo useEffect se houver documentos pendentes
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
       throw err;
     }
