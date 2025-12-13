@@ -5,22 +5,45 @@ import {
   DocumentResponse,
 } from "../types/document.types";
 import { StatusIndexacao } from "@prisma/client";
+import { IndexingService } from "./IndexingService";
 
 export class DocumentService {
   private repository: DocumentRepository;
+  private indexingService?: IndexingService;
 
-  constructor(repository: DocumentRepository) {
+  constructor(
+    repository: DocumentRepository,
+    indexingService?: IndexingService
+  ) {
     this.repository = repository;
+    this.indexingService = indexingService;
   }
 
   async createDocument(
-    data: CreateDocumentDto
+    data: CreateDocumentDto,
+    filePath?: string
   ): Promise<DocumentResponse> {
+    // Usar caminho do arquivo enviado ou o caminho fornecido
+    const caminhoArquivo = filePath || data.caminho_arquivo;
+
+    // Criar documento no banco com status PENDENTE
     const document = await this.repository.create({
       titulo: data.titulo,
-      caminho_arquivo: data.caminho_arquivo,
+      caminho_arquivo: caminhoArquivo,
       status_indexacao: StatusIndexacao.PENDENTE,
     });
+
+    // Indexar documento de forma assíncrona (não bloqueia a resposta)
+    if (this.indexingService && filePath) {
+      this.indexingService
+        .indexDocument(document.id, filePath, data.titulo)
+        .catch((error) => {
+          console.error(
+            `Erro ao indexar documento ${document.id} em background:`,
+            error
+          );
+        });
+    }
 
     return this.mapToResponse(document);
   }
@@ -59,6 +82,19 @@ export class DocumentService {
     const existingDocument = await this.repository.findById(id);
     if (!existingDocument) {
       throw new Error("Documento não encontrado");
+    }
+
+    // Remover do índice vetorial antes de deletar do banco
+    if (this.indexingService) {
+      try {
+        await this.indexingService.removeDocumentFromIndex(id);
+      } catch (error) {
+        console.error(
+          `Erro ao remover documento ${id} do índice:`,
+          error
+        );
+        // Continua com a deleção mesmo se falhar ao remover do índice
+      }
     }
 
     await this.repository.delete(id);

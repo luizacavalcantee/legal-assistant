@@ -9,12 +9,13 @@ import {
 } from "./ui/table";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Loader2, Edit, Trash2 } from "lucide-react";
+import { Loader2, Edit, Trash2, FileText, Download } from "lucide-react";
 
 interface DocumentTableProps {
   documents: Document[];
   onDelete: (id: string) => void;
   onEdit: (document: Document) => void;
+  onView?: (id: string) => void;
   isLoading?: boolean;
 }
 
@@ -22,6 +23,7 @@ export function DocumentTable({
   documents,
   onDelete,
   onEdit,
+  onView,
   isLoading = false,
 }: DocumentTableProps) {
   const getStatusBadge = (status: StatusIndexacao) => {
@@ -97,6 +99,16 @@ export function DocumentTable({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
+                  {onView && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onView(doc.id)}
+                      title="Abrir documento"
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"

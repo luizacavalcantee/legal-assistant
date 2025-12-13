@@ -22,9 +22,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import { Upload } from "lucide-react";
 
 interface DocumentFormProps {
-  onSubmit: (data: CreateDocumentDto | UpdateDocumentDto) => Promise<void>;
+  onSubmit: (data: CreateDocumentDto | UpdateDocumentDto, file?: File) => Promise<void>;
   onCancel: () => void;
   initialData?: {
     titulo: string;
@@ -47,6 +48,7 @@ export function DocumentForm({
     caminho_arquivo: initialData?.caminho_arquivo || "",
     status_indexacao: initialData?.status_indexacao || StatusIndexacao.PENDENTE,
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,14 +56,21 @@ export function DocumentForm({
     e.preventDefault();
     setError(null);
 
-    if (!formData.titulo.trim() || !formData.caminho_arquivo.trim()) {
-      setError("Título e caminho do arquivo são obrigatórios");
+    // Validação: título obrigatório
+    if (!formData.titulo.trim()) {
+      setError("Título é obrigatório");
+      return;
+    }
+
+    // Validação: arquivo obrigatório ao criar (não ao editar)
+    if (!isEdit && !selectedFile && !formData.caminho_arquivo.trim()) {
+      setError("É necessário enviar um arquivo ou fornecer um caminho");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await onSubmit(formData);
+      await onSubmit(formData, selectedFile || undefined);
       // Reset form if not editing
       if (!isEdit) {
         setFormData({
@@ -69,11 +78,23 @@ export function DocumentForm({
           caminho_arquivo: "",
           status_indexacao: StatusIndexacao.PENDENTE,
         });
+        setSelectedFile(null);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || "Erro ao salvar documento");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      // Atualizar caminho_arquivo com o nome do arquivo (opcional)
+      if (!isEdit) {
+        setFormData({ ...formData, caminho_arquivo: file.name });
+      }
     }
   };
 
@@ -112,19 +133,44 @@ export function DocumentForm({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="caminho_arquivo">Caminho do Arquivo *</Label>
-            <Input
-              id="caminho_arquivo"
-              value={formData.caminho_arquivo}
-              onChange={(e) =>
-                setFormData({ ...formData, caminho_arquivo: e.target.value })
-              }
-              placeholder="Ex: /documentos/lei-13105-2015.pdf"
-              required
-              disabled={isSubmitting}
-            />
-          </div>
+          {!isEdit && (
+            <div className="space-y-2">
+              <Label htmlFor="arquivo">Arquivo *</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="arquivo"
+                  type="file"
+                  accept=".pdf,.txt,.md,.docx"
+                  onChange={handleFileChange}
+                  disabled={isSubmitting}
+                  className="cursor-pointer"
+                />
+                {selectedFile && (
+                  <span className="text-sm text-muted-foreground">
+                    {selectedFile.name}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Formatos permitidos: PDF, TXT, MD, DOCX (máx. 10MB)
+              </p>
+            </div>
+          )}
+
+          {isEdit && (
+            <div className="space-y-2">
+              <Label htmlFor="caminho_arquivo">Caminho do Arquivo</Label>
+              <Input
+                id="caminho_arquivo"
+                value={formData.caminho_arquivo}
+                onChange={(e) =>
+                  setFormData({ ...formData, caminho_arquivo: e.target.value })
+                }
+                placeholder="Ex: /documentos/lei-13105-2015.pdf"
+                disabled={isSubmitting}
+              />
+            </div>
+          )}
 
           {isEdit && (
             <div className="space-y-2">

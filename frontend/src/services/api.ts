@@ -6,10 +6,7 @@ import {
   DocumentListResponse,
   DocumentResponse,
 } from "../types/document.types";
-import {
-  ChatMessageRequest,
-  ChatMessageResponse,
-} from "../types/chat.types";
+import { ChatMessageRequest, ChatMessageResponse } from "../types/chat.types";
 
 const api = axios.create({
   baseURL: "http://localhost:3000",
@@ -31,10 +28,29 @@ export const documentService = {
     return response.data.data;
   },
 
-  // Criar novo documento
-  async create(data: CreateDocumentDto): Promise<Document> {
-    const response = await api.post<DocumentResponse>("/documents", data);
-    return response.data.data;
+  // Criar novo documento (com upload de arquivo)
+  async create(data: CreateDocumentDto, file?: File): Promise<Document> {
+    if (file) {
+      // Enviar como multipart/form-data
+      const formData = new FormData();
+      formData.append("titulo", data.titulo);
+      formData.append("arquivo", file);
+
+      const response = await api.post<DocumentResponse>(
+        "/documents",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      return response.data.data;
+    } else {
+      // Enviar como JSON (compatibilidade com API antiga)
+      const response = await api.post<DocumentResponse>("/documents", data);
+      return response.data.data;
+    }
   },
 
   // Atualizar documento

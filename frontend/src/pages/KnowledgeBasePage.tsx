@@ -37,9 +37,9 @@ export function KnowledgeBasePage() {
   }, []);
 
   // Criar novo documento
-  const handleCreate = async (data: CreateDocumentDto) => {
+  const handleCreate = async (data: CreateDocumentDto, file?: File) => {
     try {
-      await documentService.create(data);
+      await documentService.create(data, file);
       setSuccessMessage("Documento criado com sucesso!");
       setShowForm(false);
       await loadDocuments();
@@ -82,6 +82,13 @@ export function KnowledgeBasePage() {
   const handleEdit = (document: Document) => {
     setEditingDocument(document);
     setShowForm(true);
+  };
+
+  // Visualizar/Abrir documento
+  const handleView = (id: string) => {
+    const fileUrl = `http://localhost:3000/documents/${id}/file`;
+    // Abrir em nova aba
+    window.open(fileUrl, "_blank");
   };
 
   // Cancelar formulário
@@ -143,12 +150,13 @@ export function KnowledgeBasePage() {
             </span>
           </div>
 
-          <DocumentTable
-            documents={documents}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-            isLoading={isLoading}
-          />
+            <DocumentTable
+              documents={documents}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+              onView={handleView}
+              isLoading={isLoading}
+            />
         </div>
 
         <DocumentForm
