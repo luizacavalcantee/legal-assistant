@@ -1,0 +1,27 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StatusIndexacao {
+  PENDENTE
+  INDEXADO
+  ERRO
+}
+
+model BaseDeConhecimento {
+  id              String          @id @default(uuid())
+  titulo          String
+  caminho_arquivo String
+  status_indexacao StatusIndexacao @default(PENDENTE)
+  criado_em       DateTime        @default(now())
+
+  @@map("base_de_conhecimento")
+}
+
