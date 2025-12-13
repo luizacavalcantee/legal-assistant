@@ -9,8 +9,8 @@ API REST com Node.js, Express, TypeScript e Prisma 7, seguindo o padrão Control
 Copy-Item env.example.txt .env
 # Edite o .env e configure as variáveis necessárias
 
-# 2. Subir PostgreSQL (Docker)
-docker-compose up -d postgres
+# 2. Subir PostgreSQL e Qdrant (Docker)
+docker-compose up -d
 
 # 3. Instalar dependências e configurar banco
 npm install
@@ -35,9 +35,15 @@ backend/
 │   │   └── ChatController.ts
 │   ├── services/            # Lógica de negócio
 │   │   ├── DocumentService.ts
-│   │   └── LLMService.ts    # Integração com LLM (OpenRouter/OpenAI)
+│   │   ├── LLMService.ts    # Integração com LLM (OpenRouter/OpenAI)
+│   │   ├── EmbeddingService.ts  # Geração de embeddings
+│   │   ├── DocumentProcessor.ts  # Processamento e chunking de documentos
+│   │   └── IndexingService.ts  # Orquestração da indexação vetorial
 │   ├── repositories/        # Acesso a dados
 │   │   └── DocumentRepository.ts
+│   ├── lib/                 # Bibliotecas/configurações
+│   │   ├── prisma.ts        # Cliente Prisma
+│   │   └── qdrant.ts        # Cliente Qdrant
 │   ├── routes/              # Definição de rotas
 │   │   ├── documentRoutes.ts
 │   │   └── chatRoutes.ts
@@ -202,6 +208,27 @@ Enviar mensagem para o assistente jurídico (LLM)
 - `status_indexacao`: Enum (PENDENTE, INDEXADO, ERRO)
 - `criado_em`: DateTime
 
+### Banco Vetorial (Qdrant)
+
+O projeto utiliza **Qdrant** como banco vetorial para RAG (Retrieval-Augmented Generation):
+
+- **Coleção:** `knowledge_base` (configurável via `QDRANT_COLLECTION_NAME`)
+- **Dimensão dos vetores:** 1536 (text-embedding-3-small) ou 3072 (text-embedding-3-large)
+- **Distância:** Cosseno (Cosine)
+- **Indexação automática:** Ao criar um documento, ele é automaticamente processado e indexado
+
+**Instalação do Qdrant:**
+
+```bash
+# Via Docker (recomendado)
+docker-compose up -d qdrant
+
+# Ou manualmente
+docker run -p 6333:6333 qdrant/qdrant:latest
+```
+
+O Qdrant estará disponível em: http://localhost:6333
+
 ### Comandos Prisma
 
 ```bash
@@ -223,6 +250,26 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/assistente-db?schema
 # Servidor
 PORT=3000
 NODE_ENV=development
+```
+
+### Configuração do RAG (Qdrant)
+
+```env
+# Qdrant - Banco Vetorial
+QDRANT_URL="http://localhost:6333"
+# QDRANT_API_KEY="..."  # Opcional (necessário para Qdrant Cloud)
+QDRANT_COLLECTION_NAME="knowledge_base"
+
+# Embedding Model
+EMBEDDING_MODEL="text-embedding-3-small"  # ou "openai/text-embedding-3-small" para OpenRouter
+EMBEDDING_DIMENSION="1536"  # 1536 para small, 3072 para large
+
+# Chunking (divisão de documentos)
+CHUNK_SIZE="1000"  # Tamanho do chunk em caracteres
+CHUNK_OVERLAP="200"  # Sobreposição entre chunks
+
+# Caminho base para documentos (opcional)
+# DOCUMENTS_BASE_PATH="./documents"
 ```
 
 ### Configuração do LLM
@@ -276,7 +323,10 @@ LLM_MODEL="gpt-3.5-turbo"  # ou "gpt-4", "gpt-4-turbo", etc.
 - **Prisma 7** - ORM com adaptador PostgreSQL
 - **PostgreSQL** - Banco de dados relacional
 - **@prisma/adapter-pg** - Adaptador Prisma para PostgreSQL
-- **OpenAI SDK** - Integração com modelos de linguagem (compatível com OpenRouter)
+- **Qdrant** - Banco vetorial para RAG
+- **@qdrant/js-client-rest** - Cliente Qdrant para Node.js
+- **OpenAI SDK** - Integração com modelos de linguagem e embeddings (compatível com OpenRouter)
+- **pdf-parse** - Parser de arquivos PDF
 - **Swagger/OpenAPI** - Documentação interativa da API
 - **CORS** - Cross-Origin Resource Sharing
 
@@ -375,6 +425,14 @@ Request → Controller → Service → Repository → Database
 - **System Prompt:** Configurado no `LLMService.ts` como "assistente jurídico inteligente"
 - **Rate Limits:** Sem API key tem limites menores, com API key tem limites maiores
 
+### RAG (Indexação Vetorial)
+- **Indexação automática:** Ao criar um documento via `POST /documents`, ele é automaticamente processado e indexado
+- **Status:** O `status_indexacao` é atualizado automaticamente (PENDENTE → INDEXADO ou ERRO)
+- **Processamento assíncrono:** A indexação acontece em background, não bloqueia a resposta da API
+- **Formatos suportados:** PDF, TXT, MD (outros formatos usam conteúdo mockado)
+- **Chunking:** Documentos são divididos em chunks de 1000 caracteres com overlap de 200 caracteres
+- **Embeddings:** Usa o mesmo provider do LLM (OpenRouter/OpenAI) para gerar vetores
+
 ### Segurança
 - **NUNCA** commite o arquivo `.env` no Git
 - Use variáveis de ambiente diferentes para desenvolvimento e produção
@@ -409,9 +467,11 @@ Veja mais em: `TROUBLESHOOTING_LLM.md`
 | `/documents` | GET | ✅ | Listar documentos |
 | `/documents/:id` | GET | ✅ | Buscar documento |
 | `/documents/:id` | PUT | ✅ | Atualizar documento |
-| `/documents/:id` | DELETE | ✅ | Remover documento |
+| `/documents/:id` | DELETE | ✅ | Remover documento (remove do Qdrant também) |
 | `/chat/message` | POST | ✅ | Chat com LLM |
 | `/api-docs` | GET | ✅ | Swagger UI |
+
+**Nota:** A indexação vetorial acontece automaticamente ao criar documentos. O status é atualizado de `PENDENTE` para `INDEXADO` ou `ERRO`.
 
 ## 🔗 Links Úteis
 

@@ -65,4 +65,5 @@ app.listen(PORT, () => {
     `💬 Chat API disponível em http://localhost:${PORT}/chat/message`
   );
   console.log(`📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`);
+  console.log(`🔍 RAG: Indexação vetorial ${process.env.QDRANT_URL ? "habilitada" : "desabilitada"}`);
 });

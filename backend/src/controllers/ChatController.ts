@@ -1,12 +1,15 @@
 import { Request, Response } from "express";
 import { LLMService } from "../services/LLMService";
+import { RAGChainService } from "../services/RAGChainService";
 import { ChatMessageRequest, ChatMessageResponse } from "../types/chat.types";
 
 export class ChatController {
   private llmService: LLMService;
+  private ragChainService?: RAGChainService;
 
-  constructor(llmService: LLMService) {
+  constructor(llmService: LLMService, ragChainService?: RAGChainService) {
     this.llmService = llmService;
+    this.ragChainService = ragChainService;
   }
 
   /**
@@ -64,13 +67,40 @@ export class ChatController {
         });
       }
 
-      // Gerar resposta do LLM
-      const response = await this.llmService.generateResponse(message.trim());
+      // Tentar usar RAG se disponível, senão usar LLM direto
+      let response: string;
+      let sources: ChatMessageResponse["sources"] = undefined;
+
+      if (this.ragChainService) {
+        try {
+          // Verificar se RAG está disponível (tem documentos indexados)
+          const isRAGAvailable = await this.ragChainService.isAvailable();
+          
+          if (isRAGAvailable) {
+            console.log("🔍 Usando RAG para responder...");
+            const ragResult = await this.ragChainService.query(message.trim());
+            response = ragResult.answer;
+            sources = ragResult.sources;
+          } else {
+            console.log("⚠️  RAG não disponível (sem documentos indexados). Usando LLM direto...");
+            response = await this.llmService.generateResponse(message.trim());
+          }
+        } catch (ragError: any) {
+          console.error("Erro ao usar RAG, usando LLM direto:", ragError);
+          // Fallback para LLM direto se RAG falhar
+          response = await this.llmService.generateResponse(message.trim());
+        }
+      } else {
+        // RAG não configurado, usar LLM direto
+        console.log("⚠️  RAG não configurado. Usando LLM direto...");
+        response = await this.llmService.generateResponse(message.trim());
+      }
 
       const chatResponse: ChatMessageResponse = {
         message: message.trim(),
         response: response,
         timestamp: new Date().toISOString(),
+        sources: sources,
       };
 
       return res.status(200).json(chatResponse);
