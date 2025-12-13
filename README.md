@@ -189,6 +189,8 @@ curl http://localhost:6333/
   - ✅ **Chat com RAG:** Busca semântica e respostas contextualizadas usando LangChain.js
   - ✅ Retorno de fontes dos documentos utilizados nas respostas
   - ✅ **Status de Indexação:** Visualização clara do status com atualização automática em tempo real
+  - ✅ **Integração e-SAJ:** Busca de processos no portal e-SAJ via web scraping
+  - ✅ **Identificação de Intenção:** Sistema inteligente que detecta intenções do usuário (RAG, Download, Resumo, Geral)
 
 ### 🎯 Como Usar o Chat com RAG
 
@@ -398,6 +400,7 @@ NODE_OPTIONS=--max-old-space-size=8192
 - **Etapa 6 - RAG e Banco Vetorial:** [`DOCUMENTACAO_ETAPA_6_RAG.md`](./DOCUMENTACAO_ETAPA_6_RAG.md) - Documentação completa da implementação RAG
 - **Etapa 7 - Chat com RAG:** [`DOCUMENTACAO_ETAPA_7_RAG_CHAT.md`](./DOCUMENTACAO_ETAPA_7_RAG_CHAT.md) - Documentação da integração RAG no chat usando LangChain.js
 - **Etapa 8 - Status de Indexação:** [`DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md`](./DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md) - Documentação da visualização e atualização automática do status de indexação
+- **Etapa 9 - e-SAJ e Identificação de Intenção:** [`DOCUMENTACAO_ETAPA_9_ESAJ_INTENT.md`](./DOCUMENTACAO_ETAPA_9_ESAJ_INTENT.md) - Documentação da integração com e-SAJ e sistema de identificação de intenção
 - **Swagger/API Docs:** http://localhost:3000/api-docs - Documentação interativa da API
 
 ## 🛠️ Tecnologias

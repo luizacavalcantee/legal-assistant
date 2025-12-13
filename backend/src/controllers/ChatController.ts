@@ -1,15 +1,25 @@
 import { Request, Response } from "express";
 import { LLMService } from "../services/LLMService";
 import { RAGChainService } from "../services/RAGChainService";
+import { IntentDetectionService, UserIntent } from "../services/IntentDetectionService";
+import { eSAJService } from "../services/eSAJService";
 import { ChatMessageRequest, ChatMessageResponse } from "../types/chat.types";
 
 export class ChatController {
   private llmService: LLMService;
   private ragChainService?: RAGChainService;
+  private intentDetectionService: IntentDetectionService;
+  private eSAJService: eSAJService;
 
-  constructor(llmService: LLMService, ragChainService?: RAGChainService) {
+  constructor(
+    llmService: LLMService,
+    ragChainService?: RAGChainService,
+    eSAJService?: eSAJService
+  ) {
     this.llmService = llmService;
     this.ragChainService = ragChainService;
+    this.intentDetectionService = new IntentDetectionService(llmService);
+    this.eSAJService = eSAJService || new eSAJService();
   }
 
   /**
@@ -67,39 +77,108 @@ export class ChatController {
         });
       }
 
-      // Tentar usar RAG se disponível, senão usar LLM direto
+      // 1. Detectar intenção do usuário
+      console.log("🧠 Detectando intenção do usuário...");
+      const intentResult = await this.intentDetectionService.detectIntent(
+        message.trim()
+      );
+      console.log(
+        `✅ Intenção detectada: ${intentResult.intention}${intentResult.protocolNumber ? ` (Protocolo: ${intentResult.protocolNumber})` : ""}`
+      );
+
       let response: string;
       let sources: ChatMessageResponse["sources"] = undefined;
+      let protocolNumber: string | undefined = intentResult.protocolNumber;
 
-      if (this.ragChainService) {
-        try {
-          // Verificar se RAG está disponível (tem documentos indexados)
-          const isRAGAvailable = await this.ragChainService.isAvailable();
-          
-          if (isRAGAvailable) {
-            console.log("🔍 Usando RAG para responder...");
-            const ragResult = await this.ragChainService.query(message.trim());
-            response = ragResult.answer;
-            sources = ragResult.sources;
+      // 2. Rotear baseado na intenção
+      switch (intentResult.intention) {
+        case UserIntent.DOWNLOAD_DOCUMENT:
+        case UserIntent.SUMMARIZE_PROCESS:
+          // Verificar se há número de protocolo
+          if (!protocolNumber) {
+            response =
+              "Não foi possível identificar o número do protocolo na sua mensagem. " +
+              "Por favor, forneça o número do processo no formato: NNNNNNN-DD.AAAA.J.TR.OOOO";
           } else {
-            console.log("⚠️  RAG não disponível (sem documentos indexados). Usando LLM direto...");
+            // Buscar processo no e-SAJ
+            console.log(
+              `🔍 Buscando processo ${protocolNumber} no e-SAJ...`
+            );
+            const processResult = await this.eSAJService.findProcess(
+              protocolNumber
+            );
+
+            if (!processResult.found) {
+              response =
+                `Processo ${protocolNumber} não foi encontrado no portal e-SAJ. ` +
+                (processResult.error
+                  ? `Erro: ${processResult.error}`
+                  : "Verifique se o número do protocolo está correto.");
+            } else {
+              // Processo encontrado - nas próximas etapas (10 e 11) será implementado
+              // o download do documento ou resumo do processo
+              if (intentResult.intention === UserIntent.DOWNLOAD_DOCUMENT) {
+                response =
+                  `Processo ${protocolNumber} encontrado no e-SAJ. ` +
+                  "A funcionalidade de download de documentos será implementada na próxima etapa.";
+              } else {
+                // SUMMARIZE_PROCESS
+                response =
+                  `Processo ${protocolNumber} encontrado no e-SAJ. ` +
+                  "A funcionalidade de resumo do processo será implementada na próxima etapa.";
+              }
+            }
+          }
+          break;
+
+        case UserIntent.RAG_QUERY:
+          // Usar RAG para responder
+          if (this.ragChainService) {
+            try {
+              const isRAGAvailable =
+                await this.ragChainService.isAvailable();
+
+              if (isRAGAvailable) {
+                console.log("🔍 Usando RAG para responder...");
+                const ragResult = await this.ragChainService.query(
+                  message.trim()
+                );
+                response = ragResult.answer;
+                sources = ragResult.sources;
+              } else {
+                console.log(
+                  "⚠️  RAG não disponível (sem documentos indexados). Usando LLM direto..."
+                );
+                response = await this.llmService.generateResponse(
+                  message.trim()
+                );
+              }
+            } catch (ragError: any) {
+              console.error("Erro ao usar RAG, usando LLM direto:", ragError);
+              response = await this.llmService.generateResponse(
+                message.trim()
+              );
+            }
+          } else {
+            console.log("⚠️  RAG não configurado. Usando LLM direto...");
             response = await this.llmService.generateResponse(message.trim());
           }
-        } catch (ragError: any) {
-          console.error("Erro ao usar RAG, usando LLM direto:", ragError);
-          // Fallback para LLM direto se RAG falhar
+          break;
+
+        case UserIntent.GENERAL_QUERY:
+        default:
+          // Usar LLM direto para perguntas genéricas
+          console.log("💬 Usando LLM direto para pergunta genérica...");
           response = await this.llmService.generateResponse(message.trim());
-        }
-      } else {
-        // RAG não configurado, usar LLM direto
-        console.log("⚠️  RAG não configurado. Usando LLM direto...");
-        response = await this.llmService.generateResponse(message.trim());
+          break;
       }
 
       const chatResponse: ChatMessageResponse = {
         message: message.trim(),
         response: response,
         timestamp: new Date().toISOString(),
+        intention: intentResult.intention,
+        protocolNumber: protocolNumber,
         sources: sources,
       };
 

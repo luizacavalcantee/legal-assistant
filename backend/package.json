@@ -4,7 +4,8 @@
   "description": "Backend do Assistente Jurídico Inteligente",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "npm run dev:clean-port && cross-env NODE_OPTIONS=--max-old-space-size=8192 ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev:clean-port": "powershell -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
     "build": "tsc",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
@@ -38,6 +39,7 @@
     "openai": "^6.10.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.16.3",
+    "puppeteer": "^24.33.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },

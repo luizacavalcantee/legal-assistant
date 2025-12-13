@@ -6,6 +6,8 @@ export interface ChatMessageResponse {
   message: string;
   response: string;
   timestamp: string;
+  intention?: string;
+  protocolNumber?: string;
   sources?: Array<{
     document_id: string;
     titulo: string;
