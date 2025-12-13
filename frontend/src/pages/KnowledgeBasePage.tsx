@@ -4,9 +4,11 @@ import { documentService } from "../services/api";
 import { DocumentTable } from "../components/DocumentTable";
 import { DocumentForm } from "../components/DocumentForm";
 import { Button } from "../components/ui/button";
-import { Plus, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, CheckCircle2, AlertCircle, MessageSquare } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export function KnowledgeBasePage() {
+  const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,16 +100,25 @@ export function KnowledgeBasePage() {
               Gerencie os metadados dos documentos cadastrados
             </p>
           </div>
-          <Button
-            onClick={() => {
-              setEditingDocument(null);
-              setShowForm(true);
-            }}
-            disabled={showForm}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Documento
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => navigate("/chat")}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Chat
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingDocument(null);
+                setShowForm(true);
+              }}
+              disabled={showForm}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Documento
+            </Button>
+          </div>
         </header>
 
         {successMessage && (

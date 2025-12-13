@@ -6,6 +6,10 @@ import {
   DocumentListResponse,
   DocumentResponse,
 } from "../types/document.types";
+import {
+  ChatMessageRequest,
+  ChatMessageResponse,
+} from "../types/chat.types";
 
 const api = axios.create({
   baseURL: "http://localhost:3000",
@@ -42,6 +46,14 @@ export const documentService = {
   // Remover documento
   async delete(id: string): Promise<void> {
     await api.delete(`/documents/${id}`);
+  },
+};
+
+export const chatService = {
+  // Enviar mensagem ao chat
+  async sendMessage(data: ChatMessageRequest): Promise<ChatMessageResponse> {
+    const response = await api.post<ChatMessageResponse>("/chat/message", data);
+    return response.data;
   },
 };
 
