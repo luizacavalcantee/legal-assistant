@@ -186,11 +186,26 @@ curl http://localhost:6333/
   - ✅ Geração de embeddings (OpenAI/OpenRouter)
   - ✅ Processamento otimizado para grandes documentos
   - ✅ Status de indexação em tempo real (PENDENTE → INDEXADO/ERRO)
-  - 🚧 Busca semântica no chat (próxima etapa)
+  - ✅ **Chat com RAG:** Busca semântica e respostas contextualizadas usando LangChain.js
+  - ✅ Retorno de fontes dos documentos utilizados nas respostas
+
+### 🎯 Como Usar o Chat com RAG
+
+1. **Indexe documentos primeiro:**
+   - Acesse a página "Gestão da Base de Conhecimento"
+   - Faça upload de documentos (PDF, TXT, MD)
+   - Aguarde o status mudar para "INDEXADO"
+
+2. **Use o chat:**
+   - Acesse a página de Chat
+   - Faça perguntas sobre os documentos indexados
+   - A IA buscará informações relevantes e responderá com base nos documentos
+
+3. **Verifique as fontes:**
+   - Cada resposta inclui um array `sources` com os documentos utilizados
+   - As fontes mostram título, score de similaridade e trecho usado
 
 ### 🚧 Em Desenvolvimento
-
-- Integração do RAG no chat (busca de contexto antes de responder)
 - Histórico de conversas persistente
 - Autenticação e autorização
 - Reindexação automática de documentos atualizados
@@ -330,6 +345,27 @@ Se ainda ocorrer, aumente a memória do Node.js:
 NODE_OPTIONS=--max-old-space-size=8192
 ```
 
+### Problema: Chat não usa RAG (responde sem contexto dos documentos)
+
+1. **Verifique se há documentos indexados:**
+   ```bash
+   curl http://localhost:6333/collections/knowledge_base | jq '.result.points_count'
+   # Deve retornar um número > 0
+   ```
+
+2. **Verifique se Qdrant está rodando:**
+   ```bash
+   docker ps --filter name=assistente-qdrant
+   ```
+
+3. **Verifique logs do backend:**
+   - Deve aparecer: `✅ RAG Chain Service inicializado com sucesso`
+   - Se aparecer: `⚠️ Chat funcionará sem RAG`, verifique `QDRANT_URL` no `.env`
+
+4. **Teste a resposta da API:**
+   - Se `sources` estiver presente na resposta, o RAG está funcionando
+   - Se `sources` for `undefined`, o sistema está usando LLM direto (fallback)
+
 ### Problema: Banco de dados não conecta
 
 1. Verificar se PostgreSQL está rodando:
@@ -353,6 +389,7 @@ NODE_OPTIONS=--max-old-space-size=8192
 ## 📖 Documentação Adicional
 
 - **Etapa 6 - RAG e Banco Vetorial:** [`DOCUMENTACAO_ETAPA_6_RAG.md`](./DOCUMENTACAO_ETAPA_6_RAG.md) - Documentação completa da implementação RAG
+- **Etapa 7 - Chat com RAG:** [`DOCUMENTACAO_ETAPA_7_RAG_CHAT.md`](./DOCUMENTACAO_ETAPA_7_RAG_CHAT.md) - Documentação da integração RAG no chat usando LangChain.js
 - **Swagger/API Docs:** http://localhost:3000/api-docs - Documentação interativa da API
 
 ## 🛠️ Tecnologias
@@ -366,6 +403,7 @@ NODE_OPTIONS=--max-old-space-size=8192
 - **Banco de Dados:** PostgreSQL 15
 - **Banco Vetorial:** Qdrant
 - **LLM:** OpenAI SDK (compatível com OpenRouter)
+- **RAG Orchestration:** LangChain.js
 - **Upload:** Multer
 - **PDF:** pdf-parse
 - **Documentação:** Swagger/OpenAPI
@@ -395,7 +433,7 @@ asistente-juridico/
 │   │   ├── services/        # Lógica de negócio
 │   │   ├── repositories/    # Acesso a dados
 │   │   ├── routes/          # Rotas da API
-│   │   ├── lib/             # Bibliotecas (Prisma, Qdrant)
+│   │   ├── lib/             # Bibliotecas (Prisma, Qdrant, LangChain adapters)
 │   │   ├── middleware/      # Middlewares (upload, etc.)
 │   │   └── server.ts        # Servidor Express
 │   ├── prisma/
