@@ -91,6 +91,8 @@ export class ChatController {
       let response: string;
       let sources: ChatMessageResponse["sources"] = undefined;
       let protocolNumber: string | undefined = intentResult.protocolNumber;
+      let downloadUrlResponse: string | undefined = undefined;
+      let fileNameResponse: string | undefined = undefined;
 
       // 2. Rotear baseado na intenção
       switch (intentResult.intention) {
@@ -129,19 +131,18 @@ export class ChatController {
                   processResult.processPageUrl // Passar a URL da página de detalhes
                 );
 
-                if (downloadResult.success && downloadResult.fileName) {
-                  // Construir URL para download
-                  const fileId = downloadResult.fileName;
-                  downloadUrlResponse = `/chat/download/${encodeURIComponent(fileId)}`;
-                  fileNameResponse = downloadResult.fileName;
+                if (downloadResult.success && downloadResult.pdfUrl) {
+                  // Retornar a URL do PDF para o usuário acessar diretamente
+                  downloadUrlResponse = downloadResult.pdfUrl;
+                  fileNameResponse = `${downloadResult.documentType || "documento"}.pdf`;
 
                   response =
-                    `✅ Documento baixado com sucesso!\n\n` +
-                    `📄 Arquivo: ${downloadResult.fileName}\n` +
-                    `🔗 O documento está disponível para download.`;
+                    `✅ Documento encontrado!\n\n` +
+                    `📄 Veja o documento clicando no link abaixo:\n` +
+                    `${downloadResult.pdfUrl}`;
                 } else {
                   response =
-                    `❌ Erro ao baixar documento: ${downloadResult.error || "Erro desconhecido"}`;
+                    `❌ Erro ao localizar documento: ${downloadResult.error || "Erro desconhecido"}`;
                 }
               } else {
                 // SUMMARIZE_PROCESS
@@ -201,6 +202,9 @@ export class ChatController {
         timestamp: new Date().toISOString(),
         intention: intentResult.intention,
         protocolNumber: protocolNumber,
+        documentType: intentResult.documentType,
+        downloadUrl: downloadUrlResponse,
+        fileName: fileNameResponse,
         sources: sources,
       };
 

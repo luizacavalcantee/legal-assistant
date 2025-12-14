@@ -13,6 +13,7 @@ export interface DocumentDownloadResult {
   success: boolean;
   filePath?: string;
   fileName?: string;
+  pdfUrl?: string; // URL direta do PDF extraída do iframe
   protocolNumber: string;
   documentType?: string;
   error?: string;
@@ -131,7 +132,7 @@ export class eSAJService {
       });
 
       // Aguardar o carregamento da página
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Ação 1: Trocar o tipo de consulta para "Outros" PRIMEIRO
       console.log(`🔄 Selecionando radio button "Outros"...`);
@@ -218,7 +219,7 @@ export class eSAJService {
       }
 
       // Aguardar o carregamento da página de resultados
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
       await page
         .waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 })
         .catch(() => {
@@ -362,7 +363,9 @@ export class eSAJService {
       // ETAPA 1: Navegação e Busca Específica
       // Se já temos a URL da página de detalhes, navegar diretamente para ela
       if (processPageUrl) {
-        console.log(`📄 Navegando diretamente para a página de detalhes do processo: ${processPageUrl}`);
+        console.log(
+          `📄 Navegando diretamente para a página de detalhes do processo: ${processPageUrl}`
+        );
         await page.goto(processPageUrl, {
           waitUntil: "networkidle2",
           timeout: 30000,
@@ -472,7 +475,9 @@ export class eSAJService {
       }
 
       // ETAPA 3: Seleção e Verificação do Documento
-      console.log(`🔍 Buscando documento "${documentType}" na tabela de movimentações...`);
+      console.log(
+        `🔍 Buscando documento "${documentType}" na tabela de movimentações...`
+      );
 
       // Expandir seção de movimentações se necessário
       try {
@@ -554,7 +559,9 @@ export class eSAJService {
 
             // Estratégia 1: Buscar pelo ícone de documento
             // @ts-ignore
-            const docImage = row.querySelector('img[src*="doc.png"], img[src*="documento"], img[alt*="documento"]');
+            const docImage = row.querySelector(
+              'img[src*="doc.png"], img[src*="documento"], img[alt*="documento"]'
+            );
             if (docImage) {
               // @ts-ignore
               const parentCell = docImage.closest("td");
@@ -567,7 +574,9 @@ export class eSAJService {
             // Estratégia 2: Buscar links com classe específica de documento
             if (!documentLink) {
               // @ts-ignore
-              const docLinks = row.querySelectorAll("a.linkMovVincProc, a[href*='abrirDocumento'], a[href*='liberarAutoPorSenha']");
+              const docLinks = row.querySelectorAll(
+                "a.linkMovVincProc, a[href*='abrirDocumento'], a[href*='liberarAutoPorSenha']"
+              );
               if (docLinks.length > 0) {
                 documentLink = docLinks[0];
               }
@@ -653,64 +662,6 @@ export class eSAJService {
         `📄 Tentando baixar: ${targetDocument.movimentoText.substring(0, 100)}`
       );
 
-      // Obter lista de arquivos antes do download
-      const filesBefore = new Set(fs.readdirSync(this.downloadsDir));
-
-      // Preparar para interceptar o download
-      const downloadPromise = new Promise<string>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Timeout aguardando download (30 segundos)"));
-        }, 30000);
-
-        const checkInterval = setInterval(() => {
-          try {
-            const filesAfter = fs.readdirSync(this.downloadsDir);
-            const newFiles = filesAfter.filter(
-              (file) =>
-                !filesBefore.has(file) &&
-                (file.endsWith(".pdf") ||
-                  file.endsWith(".zip") ||
-                  file.endsWith(".doc") ||
-                  file.endsWith(".docx") ||
-                  file.endsWith(".PDF") ||
-                  file.endsWith(".ZIP"))
-            );
-
-            if (newFiles.length > 0) {
-              const fileStats = newFiles.map((file) => {
-                const filePath = path.join(this.downloadsDir, file);
-                const stats = fs.statSync(filePath);
-                return {
-                  name: file,
-                  time: stats.mtime.getTime(),
-                  size: stats.size,
-                };
-              });
-
-              fileStats.sort((a, b) => {
-                if (b.time !== a.time) return b.time - a.time;
-                return b.size - a.size;
-              });
-
-              const latestFile = fileStats[0].name;
-              const filePath = path.join(this.downloadsDir, latestFile);
-              const initialSize = fs.statSync(filePath).size;
-
-              setTimeout(() => {
-                const finalSize = fs.statSync(filePath).size;
-                if (initialSize === finalSize && finalSize > 0) {
-                  clearInterval(checkInterval);
-                  clearTimeout(timeout);
-                  resolve(latestFile);
-                }
-              }, 1000);
-            }
-          } catch (error) {
-            // Continuar tentando
-          }
-        }, 500);
-      });
-
       // Encontrar e clicar no link do documento
       let documentLinkElement = null;
 
@@ -728,7 +679,10 @@ export class eSAJService {
 
       if (!documentLinkElement) {
         // Buscar por texto do movimento
-        const movimentoTextShort = targetDocument.movimentoText.substring(0, 50);
+        const movimentoTextShort = targetDocument.movimentoText.substring(
+          0,
+          50
+        );
         documentLinkElement = await page.evaluateHandle((text) => {
           // @ts-ignore
           const rows = Array.from(
@@ -762,63 +716,236 @@ export class eSAJService {
         };
       }
 
-      // Clicar no link do documento
-      console.log(`🔘 Clicando no link do documento...`);
+      // Extrair a URL do link ANTES de clicar
+      console.log(`🔍 Extraindo URL do link do documento...`);
+      let pdfUrl: string | null = null;
+
       try {
-        await documentLinkElement.click();
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      } catch (clickError: any) {
-        // Tentar via JavaScript
-        await page.evaluate((linkId, linkHref) => {
+        // Obter o href do link
+        const linkHref = await page.evaluate((element) => {
           // @ts-ignore
-          let link = null;
-          if (linkId) {
-            // @ts-ignore
-            link = document.getElementById(linkId);
-          } else if (linkHref) {
-            // @ts-ignore
-            const links = Array.from(
-              document.querySelectorAll(`a[href*="${linkHref}"]`)
+          return element.getAttribute("href") || "";
+        }, documentLinkElement);
+
+        if (!linkHref) {
+          return {
+            success: false,
+            protocolNumber: cleanProtocol,
+            documentType: documentType,
+            error: "Link do documento não possui href.",
+          };
+        }
+
+        console.log(`📋 href do link: ${linkHref}`);
+
+        // Construir URL completa do link
+        const baseUrl = new URL(page.url()).origin; // Ex: https://esaj.tjsp.jus.br
+        let fullLinkUrl = linkHref.startsWith("http")
+          ? linkHref
+          : linkHref.startsWith("/")
+          ? `${baseUrl}${linkHref}`
+          : `${baseUrl}/${linkHref}`;
+
+        console.log(`📄 URL completa do link: ${fullLinkUrl}`);
+
+        // Verificar se o link é direto para PDF ou se abre uma página com iframe
+        if (
+          fullLinkUrl.includes("getPDF.do") ||
+          fullLinkUrl.includes(".pdf") ||
+          fullLinkUrl.includes("abrirDocumento")
+        ) {
+          // Se o link contém getPDF.do, é um link direto para PDF
+          if (fullLinkUrl.includes("getPDF.do")) {
+            pdfUrl = fullLinkUrl;
+            console.log(`✅ Link direto para PDF encontrado: ${pdfUrl}`);
+          } else if (fullLinkUrl.includes("abrirDocumento")) {
+            // Se é abrirDocumento, tentar construir URL do PDF diretamente a partir dos parâmetros
+            console.log(
+              `📄 Link abre página com iframe, tentando construir URL do PDF a partir dos parâmetros...`
             );
-            if (links.length > 0) link = links[0];
+
+            const linkUrl = new URL(fullLinkUrl);
+            const cdDocumento = linkUrl.searchParams.get("cdDocumento");
+            const processoCodigo = linkUrl.searchParams.get("processo.codigo");
+
+            if (cdDocumento) {
+              // Construir URL do PDF diretamente a partir dos parâmetros
+              const pdfUrlFromParams = `${baseUrl}/pastadigital/getPDF.do?cdDocumento=${cdDocumento}${
+                processoCodigo ? `&processo.codigo=${processoCodigo}` : ""
+              }`;
+              console.log(
+                `✅ URL do PDF construída a partir dos parâmetros: ${pdfUrlFromParams}`
+              );
+              pdfUrl = pdfUrlFromParams;
+            } else {
+              // Se não tem cdDocumento, tentar navegar e extrair do iframe
+              console.log(
+                `⚠️  Parâmetro cdDocumento não encontrado, tentando navegar e extrair do iframe...`
+              );
+
+              try {
+                // Aguardar navegação para a página do documento (com timeout maior)
+                const navigationPromise = page.waitForNavigation({
+                  waitUntil: "domcontentloaded", // Mais rápido que networkidle2
+                  timeout: 30000, // Aumentar timeout para 30 segundos
+                });
+
+                await documentLinkElement.click();
+
+                // Aguardar navegação ou timeout
+                try {
+                  await navigationPromise;
+                } catch (navError: any) {
+                  // Se timeout, continuar mesmo assim - a página pode ter carregado parcialmente
+                  console.log(
+                    `⚠️  Timeout na navegação, continuando mesmo assim: ${navError.message}`
+                  );
+                }
+
+                await new Promise((resolve) => setTimeout(resolve, 5000)); // Aguardar mais tempo para iframe carregar
+
+                // Localizar o iframe que contém o visualizador de PDF
+                // Tentar múltiplos seletores e aguardar o iframe aparecer
+                let iframe = null;
+                const iframeSelectors = [
+                  "iframe#documento",
+                  'iframe[src*="viewer"]',
+                  'iframe[src*="getPDF"]',
+                  "iframe",
+                ];
+
+                for (const selector of iframeSelectors) {
+                  try {
+                    iframe = await page.waitForSelector(selector, {
+                      timeout: 10000,
+                    });
+                    if (iframe) {
+                      console.log(
+                        `✅ Iframe encontrado com seletor: ${selector}`
+                      );
+                      break;
+                    }
+                  } catch (e) {
+                    // Tentar próximo seletor
+                    continue;
+                  }
+                }
+
+                if (!iframe) {
+                  return {
+                    success: false,
+                    protocolNumber: cleanProtocol,
+                    documentType: documentType,
+                    error: "Iframe do documento não encontrado na página.",
+                  };
+                }
+
+                // Se ainda não temos a URL do PDF, extrair do iframe
+                if (!pdfUrl && iframe) {
+                  // Obter o atributo src do iframe
+                  const iframeSrc = await page.evaluate((iframeEl) => {
+                    // @ts-ignore
+                    return iframeEl.getAttribute("src");
+                  }, iframe);
+
+                  if (!iframeSrc) {
+                    return {
+                      success: false,
+                      protocolNumber: cleanProtocol,
+                      documentType: documentType,
+                      error: "Atributo src do iframe não encontrado.",
+                    };
+                  }
+
+                  console.log(`📋 URL do iframe: ${iframeSrc}`);
+
+                  // Recuperação da URL do PDF (parâmetro file)
+                  try {
+                    const urlObj = new URL(iframeSrc, page.url());
+                    const fileParam = urlObj.searchParams.get("file");
+
+                    if (fileParam) {
+                      // Decodificar a URL (URI decode)
+                      const decodedFileUrl = decodeURIComponent(fileParam);
+                      console.log(
+                        `📄 URL decodificada do PDF: ${decodedFileUrl}`
+                      );
+
+                      // Reconstruir a URL completa do PDF
+                      pdfUrl = decodedFileUrl.startsWith("http")
+                        ? decodedFileUrl
+                        : `${baseUrl}${decodedFileUrl}`;
+
+                      console.log(
+                        `✅ URL completa do PDF extraída do iframe: ${pdfUrl}`
+                      );
+                    } else {
+                      // Se não tem parâmetro file, tentar usar a URL do iframe diretamente
+                      console.log(
+                        `⚠️  Parâmetro 'file' não encontrado, tentando usar URL do iframe diretamente`
+                      );
+                      pdfUrl = iframeSrc.startsWith("http")
+                        ? iframeSrc
+                        : `${baseUrl}${iframeSrc}`;
+                    }
+                  } catch (urlError: any) {
+                    console.log(
+                      `⚠️  Erro ao processar URL do iframe: ${urlError.message}`
+                    );
+                    // Tentar usar a URL do iframe diretamente
+                    pdfUrl = iframeSrc.startsWith("http")
+                      ? iframeSrc
+                      : `${baseUrl}${iframeSrc}`;
+                  }
+                }
+              } catch (iframeError: any) {
+                // Se der erro ao processar iframe, retornar erro
+                return {
+                  success: false,
+                  protocolNumber: cleanProtocol,
+                  documentType: documentType,
+                  error: `Erro ao processar iframe: ${iframeError.message}`,
+                };
+              }
+            }
+          } else {
+            // Link direto para PDF (dentro do if abrirDocumento, mas não é getPDF.do)
+            pdfUrl = fullLinkUrl;
+            console.log(`✅ Link direto para PDF: ${pdfUrl}`);
           }
-          if (link) {
-            // @ts-ignore
-            link.click();
-          }
-        }, targetDocument.linkId, targetDocument.linkHref);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-
-      // Aguardar download
-      try {
-        const downloadedFileName = await Promise.race([
-          downloadPromise,
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 30000)
-          ),
-        ]);
-
-        const filePath = path.join(this.downloadsDir, downloadedFileName);
-        const fileName = downloadedFileName;
-
-        console.log(`✅ Download concluído: ${fileName}`);
-
-        return {
-          success: true,
-          filePath: filePath,
-          fileName: fileName,
-          protocolNumber: cleanProtocol,
-          documentType: documentType,
-        };
-      } catch (downloadError: any) {
+        } else {
+          // Link não reconhecido, tentar usar como está
+          pdfUrl = fullLinkUrl;
+          console.log(`⚠️  Link não reconhecido, usando como está: ${pdfUrl}`);
+        }
+      } catch (extractError: any) {
         return {
           success: false,
           protocolNumber: cleanProtocol,
           documentType: documentType,
-          error: `Erro ao aguardar download: ${downloadError.message}`,
+          error: `Erro ao extrair URL do link: ${extractError.message}`,
         };
       }
+
+      // Retornar a URL do PDF para o usuário acessar diretamente
+      if (!pdfUrl) {
+        return {
+          success: false,
+          protocolNumber: cleanProtocol,
+          documentType: documentType,
+          error: "URL do PDF não pôde ser extraída.",
+        };
+      }
+
+      console.log(`✅ URL do PDF extraída com sucesso: ${pdfUrl}`);
+
+      // Retornar sucesso com a URL do PDF
+      return {
+        success: true,
+        pdfUrl: pdfUrl,
+        protocolNumber: cleanProtocol,
+        documentType: documentType,
+      };
     } catch (error: any) {
       console.error(
         `❌ Erro ao baixar documento do processo ${protocolNumber}:`,
