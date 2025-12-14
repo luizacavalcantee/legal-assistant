@@ -48,5 +48,8 @@ const chatController = new ChatController(
 // Rota para enviar mensagem ao chat
 router.post("/message", (req, res) => chatController.handleChatRequest(req, res));
 
+// Rota para servir arquivos baixados do e-SAJ
+router.get("/download/:fileName", (req, res) => chatController.serveDownload(req, res));
+
 export default router;
 

@@ -1,8 +1,20 @@
 import puppeteer, { Browser, Page } from "puppeteer";
+import * as fs from "fs";
+import * as path from "path";
 
 export interface ProcessSearchResult {
   found: boolean;
   protocolNumber: string;
+  processPageUrl?: string; // URL da página de detalhes do processo (se encontrado)
+  error?: string;
+}
+
+export interface DocumentDownloadResult {
+  success: boolean;
+  filePath?: string;
+  fileName?: string;
+  protocolNumber: string;
+  documentType?: string;
   error?: string;
 }
 
@@ -13,12 +25,22 @@ export class eSAJService {
   private browser: Browser | null = null;
   private readonly eSAJUrl: string;
   private readonly headless: boolean;
+  private readonly downloadsDir: string;
 
   constructor() {
     // URL do e-SAJ - ajustar conforme necessário
     this.eSAJUrl =
       process.env.ESAJ_URL || "https://esaj.tjsp.jus.br/cpopg/open.do";
     this.headless = process.env.PUPPETEER_HEADLESS !== "false"; // headless por padrão
+
+    // Diretório para downloads temporários
+    this.downloadsDir =
+      process.env.DOWNLOADS_DIR || path.join(process.cwd(), "downloads_esaj");
+
+    // Criar diretório se não existir
+    if (!fs.existsSync(this.downloadsDir)) {
+      fs.mkdirSync(this.downloadsDir, { recursive: true });
+    }
   }
 
   /**
@@ -47,6 +69,28 @@ export class eSAJService {
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
+    }
+  }
+
+  /**
+   * Configura uma página para downloads programáticos
+   */
+  private async setupPageForDownloads(page: Page): Promise<void> {
+    try {
+      // Configurar cliente CDP para interceptar downloads
+      const client = await page.target().createCDPSession();
+
+      // Configurar comportamento de download
+      await client.send("Page.setDownloadBehavior", {
+        behavior: "allow",
+        downloadPath: this.downloadsDir,
+      });
+
+      console.log(`✅ Configuração de downloads aplicada na página`);
+    } catch (error: any) {
+      console.log(
+        `⚠️  Erro ao configurar downloads: ${error.message}. Continuando...`
+      );
     }
   }
 
@@ -89,69 +133,88 @@ export class eSAJService {
       // Aguardar o carregamento da página
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Tentar encontrar o campo de busca do número do processo
-      // Nota: Os seletores podem variar dependendo do portal específico
-      // Este é um exemplo genérico que pode precisar ser ajustado
-      const searchSelectors = [
-        'input[name="numeroDigitoAnoUnificado"]',
-        'input[name="numeroProcesso"]',
-        'input[id="numeroDigitoAnoUnificado"]',
-        'input[id="numeroProcesso"]',
-        'input[type="text"]',
-      ];
-
-      let searchInput = null;
-      for (const selector of searchSelectors) {
-        try {
-          searchInput = await page.$(selector);
-          if (searchInput) {
-            console.log(`✅ Campo de busca encontrado: ${selector}`);
-            break;
-          }
-        } catch (e) {
-          // Continuar tentando outros seletores
+      // Ação 1: Trocar o tipo de consulta para "Outros" PRIMEIRO
+      console.log(`🔄 Selecionando radio button "Outros"...`);
+      try {
+        const outrosRadio = await page.$('input[id="radioNumeroAntigo"]');
+        if (outrosRadio) {
+          await outrosRadio.click();
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          console.log(`✅ Radio button "Outros" selecionado`);
+        } else {
+          return {
+            found: false,
+            protocolNumber: cleanProtocol,
+            error:
+              "Radio button 'Outros' não encontrado. A estrutura do portal pode ter mudado.",
+          };
         }
-      }
-
-      if (!searchInput) {
+      } catch (radioError: any) {
         return {
           found: false,
           protocolNumber: cleanProtocol,
-          error:
-            "Campo de busca não encontrado. A estrutura do portal pode ter mudado.",
+          error: `Erro ao selecionar radio button "Outros": ${radioError.message}`,
         };
       }
 
-      // Inserir o número do protocolo
-      await searchInput.type(cleanProtocol, { delay: 100 });
-
-      // Tentar encontrar e clicar no botão de busca
-      const searchButtonSelectors = [
-        'input[type="submit"]',
-        'button[type="submit"]',
-        'button:contains("Consultar")',
-        'input[value*="Consultar"]',
-        'button:contains("Buscar")',
-      ];
-
-      let searchButton = null;
-      for (const selector of searchButtonSelectors) {
-        try {
-          searchButton = await page.$(selector);
-          if (searchButton) {
-            console.log(`✅ Botão de busca encontrado: ${selector}`);
-            break;
-          }
-        } catch (e) {
-          // Continuar tentando outros seletores
+      // Ação 2: Preencher o número do protocolo no campo que aparece após selecionar "Outros"
+      console.log(`📋 Preenchendo número do protocolo: ${cleanProtocol}`);
+      try {
+        const protocolInput = await page.$(
+          'input[id="nuProcessoAntigoFormatado"]'
+        );
+        if (!protocolInput) {
+          return {
+            found: false,
+            protocolNumber: cleanProtocol,
+            error:
+              "Campo de protocolo não encontrado após selecionar 'Outros'.",
+          };
         }
+
+        // Limpar campo e preencher (colar o número completo)
+        await protocolInput.click({ clickCount: 3 });
+        await protocolInput.type(cleanProtocol, { delay: 50 });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        console.log(`✅ Número do protocolo preenchido`);
+      } catch (inputError: any) {
+        return {
+          found: false,
+          protocolNumber: cleanProtocol,
+          error: `Erro ao preencher número do protocolo: ${inputError.message}`,
+        };
       }
 
-      if (!searchButton) {
-        // Tentar pressionar Enter no campo de busca
-        await searchInput.press("Enter");
-      } else {
-        await searchButton.click();
+      // Ação 3: Submeter o formulário
+      console.log(`🔘 Clicando no botão de consulta...`);
+      try {
+        const consultButton = await page.$(
+          'input[id="botaoConsultarProcessos"]'
+        );
+        if (!consultButton) {
+          return {
+            found: false,
+            protocolNumber: cleanProtocol,
+            error: "Botão de consulta não encontrado.",
+          };
+        }
+
+        // Aguardar navegação após clicar
+        const navigationPromise = page.waitForNavigation({
+          waitUntil: "networkidle2",
+          timeout: 15000,
+        });
+
+        await consultButton.click();
+        await navigationPromise;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        console.log(`✅ Formulário submetido e página de detalhes carregada`);
+      } catch (buttonError: any) {
+        return {
+          found: false,
+          protocolNumber: cleanProtocol,
+          error: `Erro ao submeter formulário: ${buttonError.message}`,
+        };
       }
 
       // Aguardar o carregamento da página de resultados
@@ -212,9 +275,12 @@ export class eSAJService {
 
       if (hasSuccessIndicator || processElements.length > 0) {
         console.log(`✅ Processo ${cleanProtocol} encontrado no e-SAJ`);
+        // Capturar a URL da página de detalhes do processo
+        const processPageUrl = page.url();
         return {
           found: true,
           protocolNumber: cleanProtocol,
+          processPageUrl: processPageUrl,
         };
       }
 
@@ -238,6 +304,533 @@ export class eSAJService {
       };
     } finally {
       // Fechar a página, mas manter o navegador aberto para reutilização
+      if (page) {
+        await page.close();
+      }
+    }
+  }
+
+  /**
+   * Baixa um documento específico de um processo no e-SAJ
+   * @param protocolNumber - Número do protocolo do processo
+   * @param documentType - Tipo de documento solicitado (ex: "petição inicial", "sentença")
+   * @param processPageUrl - URL opcional da página de detalhes do processo (para evitar buscar novamente)
+   * @returns Resultado do download com caminho do arquivo
+   */
+  async downloadDocument(
+    protocolNumber: string,
+    documentType: string,
+    processPageUrl?: string
+  ): Promise<DocumentDownloadResult> {
+    let page: Page | null = null;
+
+    try {
+      console.log(
+        `📥 Iniciando download de documento "${documentType}" do processo ${protocolNumber}...`
+      );
+
+      // Validar parâmetros
+      if (!protocolNumber || protocolNumber.trim().length === 0) {
+        return {
+          success: false,
+          protocolNumber: protocolNumber,
+          documentType: documentType,
+          error: "Número de protocolo não fornecido",
+        };
+      }
+
+      if (!documentType || documentType.trim().length === 0) {
+        return {
+          success: false,
+          protocolNumber: protocolNumber,
+          documentType: documentType,
+          error: "Tipo de documento não fornecido",
+        };
+      }
+
+      // Limpar e formatar número do protocolo
+      const cleanProtocol = protocolNumber.trim().replace(/[\s.\-]/g, "");
+
+      // Inicializar navegador e configurar para downloads
+      const browser = await this.initBrowser();
+      page = await browser.newPage();
+      await this.setupPageForDownloads(page);
+
+      // Configurar timeout
+      page.setDefaultTimeout(30000);
+
+      // ETAPA 1: Navegação e Busca Específica
+      // Se já temos a URL da página de detalhes, navegar diretamente para ela
+      if (processPageUrl) {
+        console.log(`📄 Navegando diretamente para a página de detalhes do processo: ${processPageUrl}`);
+        await page.goto(processPageUrl, {
+          waitUntil: "networkidle2",
+          timeout: 30000,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        console.log(`✅ Já na página de detalhes do processo`);
+      } else {
+        // Se não temos a URL, fazer a busca completa
+        console.log(`📄 Navegando para ${this.eSAJUrl}...`);
+        await page.goto(this.eSAJUrl, {
+          waitUntil: "networkidle2",
+          timeout: 30000,
+        });
+
+        // Aguardar carregamento da página
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // Ação 1: Trocar o tipo de consulta para "Outros"
+        console.log(`🔄 Selecionando radio button "Outros"...`);
+        try {
+          const outrosRadio = await page.$('input[id="radioNumeroAntigo"]');
+          if (outrosRadio) {
+            await outrosRadio.click();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            console.log(`✅ Radio button "Outros" selecionado`);
+          } else {
+            return {
+              success: false,
+              protocolNumber: cleanProtocol,
+              documentType: documentType,
+              error:
+                "Radio button 'Outros' não encontrado. A estrutura do portal pode ter mudado.",
+            };
+          }
+        } catch (radioError: any) {
+          return {
+            success: false,
+            protocolNumber: cleanProtocol,
+            documentType: documentType,
+            error: `Erro ao selecionar radio button "Outros": ${radioError.message}`,
+          };
+        }
+
+        // Ação 2: Preencher o número do protocolo
+        console.log(`📋 Preenchendo número do protocolo: ${cleanProtocol}`);
+        try {
+          const protocolInput = await page.$(
+            'input[id="nuProcessoAntigoFormatado"]'
+          );
+          if (!protocolInput) {
+            return {
+              success: false,
+              protocolNumber: cleanProtocol,
+              documentType: documentType,
+              error:
+                "Campo de protocolo não encontrado após selecionar 'Outros'.",
+            };
+          }
+
+          // Limpar campo e preencher
+          await protocolInput.click({ clickCount: 3 });
+          await protocolInput.type(cleanProtocol, { delay: 50 });
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          console.log(`✅ Número do protocolo preenchido`);
+        } catch (inputError: any) {
+          return {
+            success: false,
+            protocolNumber: cleanProtocol,
+            documentType: documentType,
+            error: `Erro ao preencher número do protocolo: ${inputError.message}`,
+          };
+        }
+
+        // Ação 3: Submeter o formulário
+        console.log(`🔘 Clicando no botão de consulta...`);
+        try {
+          const consultButton = await page.$(
+            'input[id="botaoConsultarProcessos"]'
+          );
+          if (!consultButton) {
+            return {
+              success: false,
+              protocolNumber: cleanProtocol,
+              documentType: documentType,
+              error: "Botão de consulta não encontrado.",
+            };
+          }
+
+          // Aguardar navegação após clicar
+          const navigationPromise = page.waitForNavigation({
+            waitUntil: "networkidle2",
+            timeout: 15000,
+          });
+
+          await consultButton.click();
+          await navigationPromise;
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          console.log(`✅ Formulário submetido e página de detalhes carregada`);
+        } catch (buttonError: any) {
+          return {
+            success: false,
+            protocolNumber: cleanProtocol,
+            documentType: documentType,
+            error: `Erro ao submeter formulário: ${buttonError.message}`,
+          };
+        }
+      }
+
+      // ETAPA 3: Seleção e Verificação do Documento
+      console.log(`🔍 Buscando documento "${documentType}" na tabela de movimentações...`);
+
+      // Expandir seção de movimentações se necessário
+      try {
+        const maisButton = await page.$("#linkmovimentacoes");
+        if (maisButton) {
+          const todasMovimentacoes = await page.$("#tabelaTodasMovimentacoes");
+          const isExpanded = todasMovimentacoes
+            ? await page.evaluate((el) => {
+                // @ts-ignore
+                const style = window.getComputedStyle(el);
+                return style.display !== "none";
+              }, todasMovimentacoes)
+            : false;
+
+          if (!isExpanded) {
+            console.log(`🔘 Expandindo seção de movimentações...`);
+            await maisButton.click();
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            console.log(`✅ Seção de movimentações expandida`);
+          }
+        }
+      } catch (expandError: any) {
+        console.log(
+          `⚠️  Erro ao expandir movimentações: ${expandError.message}. Continuando...`
+        );
+      }
+
+      // Buscar na tabela de movimentações
+      const movimentacoes = await page.evaluate((docType) => {
+        // @ts-ignore
+        const todasMovimentacoes = document.querySelector(
+          "#tabelaTodasMovimentacoes"
+        );
+        // @ts-ignore
+        const ultimasMovimentacoes = document.querySelector(
+          "#tabelaUltimasMovimentacoes"
+        );
+
+        // Usar a tabela expandida se disponível, senão usar a de últimas
+        // @ts-ignore
+        const tbody =
+          todasMovimentacoes &&
+          window.getComputedStyle(todasMovimentacoes).display !== "none"
+            ? todasMovimentacoes
+            : ultimasMovimentacoes;
+
+        if (!tbody) return [];
+
+        // @ts-ignore
+        const rows = Array.from(
+          tbody.querySelectorAll("tr.containerMovimentacao")
+        );
+        const results: Array<{
+          movimentoText: string;
+          linkHref: string;
+          linkId: string;
+          hasDocument: boolean;
+          requiresPassword: boolean;
+        }> = [];
+
+        const searchTerms = docType.toLowerCase().split(/\s+/);
+
+        for (const row of rows) {
+          // @ts-ignore
+          const descricaoCell = row.querySelector("td.descricaoMovimentacao");
+          if (!descricaoCell) continue;
+
+          const movimentoText = (descricaoCell.textContent || "").trim();
+          const movimentoTextLower = movimentoText.toLowerCase();
+
+          // Verificar se o texto contém os termos do documentType
+          const matches = searchTerms.some((term) =>
+            movimentoTextLower.includes(term)
+          );
+
+          if (matches) {
+            // Buscar link de documento na linha
+            let documentLink: any = null;
+
+            // Estratégia 1: Buscar pelo ícone de documento
+            // @ts-ignore
+            const docImage = row.querySelector('img[src*="doc.png"], img[src*="documento"], img[alt*="documento"]');
+            if (docImage) {
+              // @ts-ignore
+              const parentCell = docImage.closest("td");
+              if (parentCell) {
+                // @ts-ignore
+                documentLink = parentCell.querySelector("a");
+              }
+            }
+
+            // Estratégia 2: Buscar links com classe específica de documento
+            if (!documentLink) {
+              // @ts-ignore
+              const docLinks = row.querySelectorAll("a.linkMovVincProc, a[href*='abrirDocumento'], a[href*='liberarAutoPorSenha']");
+              if (docLinks.length > 0) {
+                documentLink = docLinks[0];
+              }
+            }
+
+            // Estratégia 3: Buscar qualquer link na linha que seja de documento
+            if (!documentLink) {
+              // @ts-ignore
+              const links = row.querySelectorAll("a");
+              for (const link of links) {
+                const href = link.getAttribute("href") || "";
+                const onclick = link.getAttribute("onclick") || "";
+                if (
+                  href.includes("abrirDocumento") ||
+                  href.includes("liberarAutoPorSenha") ||
+                  onclick.includes("abrirDocumento") ||
+                  onclick.includes("cdDocumento")
+                ) {
+                  documentLink = link;
+                  break;
+                }
+              }
+            }
+
+            if (documentLink) {
+              const href = documentLink.getAttribute("href") || "";
+              const requiresPassword = href.includes("#liberarAutoPorSenha");
+
+              results.push({
+                movimentoText,
+                linkHref: href,
+                linkId: documentLink.id || "",
+                hasDocument: true,
+                requiresPassword,
+              });
+            }
+          }
+        }
+
+        return results;
+      }, documentType);
+
+      console.log(
+        `📋 Encontradas ${movimentacoes.length} movimentação(ões) correspondente(s) ao tipo "${documentType}"`
+      );
+
+      if (movimentacoes.length === 0) {
+        return {
+          success: false,
+          protocolNumber: cleanProtocol,
+          documentType: documentType,
+          error:
+            "Documento solicitado não foi encontrado na movimentação do processo.",
+        };
+      }
+
+      // ETAPA 4: Regra de Download (Checagem de Senha)
+      // Priorizar documentos sem senha
+      const documentosSemSenha = movimentacoes.filter(
+        (mov) => !mov.requiresPassword
+      );
+      const documentosComSenha = movimentacoes.filter(
+        (mov) => mov.requiresPassword
+      );
+
+      console.log(
+        `📊 Análise: ${documentosSemSenha.length} documento(s) sem senha, ${documentosComSenha.length} documento(s) requerem senha`
+      );
+
+      if (documentosSemSenha.length === 0) {
+        return {
+          success: false,
+          protocolNumber: cleanProtocol,
+          documentType: documentType,
+          error:
+            "O documento solicitado está disponível, mas requer credenciais de acesso (senha/login) e não pode ser baixado publicamente.",
+        };
+      }
+
+      // Tentar baixar o primeiro documento sem senha
+      const targetDocument = documentosSemSenha[0];
+      console.log(
+        `📄 Tentando baixar: ${targetDocument.movimentoText.substring(0, 100)}`
+      );
+
+      // Obter lista de arquivos antes do download
+      const filesBefore = new Set(fs.readdirSync(this.downloadsDir));
+
+      // Preparar para interceptar o download
+      const downloadPromise = new Promise<string>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Timeout aguardando download (30 segundos)"));
+        }, 30000);
+
+        const checkInterval = setInterval(() => {
+          try {
+            const filesAfter = fs.readdirSync(this.downloadsDir);
+            const newFiles = filesAfter.filter(
+              (file) =>
+                !filesBefore.has(file) &&
+                (file.endsWith(".pdf") ||
+                  file.endsWith(".zip") ||
+                  file.endsWith(".doc") ||
+                  file.endsWith(".docx") ||
+                  file.endsWith(".PDF") ||
+                  file.endsWith(".ZIP"))
+            );
+
+            if (newFiles.length > 0) {
+              const fileStats = newFiles.map((file) => {
+                const filePath = path.join(this.downloadsDir, file);
+                const stats = fs.statSync(filePath);
+                return {
+                  name: file,
+                  time: stats.mtime.getTime(),
+                  size: stats.size,
+                };
+              });
+
+              fileStats.sort((a, b) => {
+                if (b.time !== a.time) return b.time - a.time;
+                return b.size - a.size;
+              });
+
+              const latestFile = fileStats[0].name;
+              const filePath = path.join(this.downloadsDir, latestFile);
+              const initialSize = fs.statSync(filePath).size;
+
+              setTimeout(() => {
+                const finalSize = fs.statSync(filePath).size;
+                if (initialSize === finalSize && finalSize > 0) {
+                  clearInterval(checkInterval);
+                  clearTimeout(timeout);
+                  resolve(latestFile);
+                }
+              }, 1000);
+            }
+          } catch (error) {
+            // Continuar tentando
+          }
+        }, 500);
+      });
+
+      // Encontrar e clicar no link do documento
+      let documentLinkElement = null;
+
+      if (targetDocument.linkId) {
+        documentLinkElement = await page.$(`#${targetDocument.linkId}`);
+      }
+
+      if (!documentLinkElement && targetDocument.linkHref) {
+        // Buscar link por href
+        const links = await page.$$(`a[href*="${targetDocument.linkHref}"]`);
+        if (links.length > 0) {
+          documentLinkElement = links[0];
+        }
+      }
+
+      if (!documentLinkElement) {
+        // Buscar por texto do movimento
+        const movimentoTextShort = targetDocument.movimentoText.substring(0, 50);
+        documentLinkElement = await page.evaluateHandle((text) => {
+          // @ts-ignore
+          const rows = Array.from(
+            document.querySelectorAll("tr.containerMovimentacao")
+          );
+          for (const row of rows) {
+            // @ts-ignore
+            const descricaoCell = row.querySelector("td.descricaoMovimentacao");
+            if (descricaoCell && descricaoCell.textContent?.includes(text)) {
+              // @ts-ignore
+              const link = row.querySelector("a");
+              if (link) return link;
+            }
+          }
+          return null;
+        }, movimentoTextShort);
+
+        if (documentLinkElement && documentLinkElement.asElement()) {
+          documentLinkElement = documentLinkElement.asElement();
+        } else {
+          documentLinkElement = null;
+        }
+      }
+
+      if (!documentLinkElement) {
+        return {
+          success: false,
+          protocolNumber: cleanProtocol,
+          documentType: documentType,
+          error: "Link do documento não encontrado na página.",
+        };
+      }
+
+      // Clicar no link do documento
+      console.log(`🔘 Clicando no link do documento...`);
+      try {
+        await documentLinkElement.click();
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      } catch (clickError: any) {
+        // Tentar via JavaScript
+        await page.evaluate((linkId, linkHref) => {
+          // @ts-ignore
+          let link = null;
+          if (linkId) {
+            // @ts-ignore
+            link = document.getElementById(linkId);
+          } else if (linkHref) {
+            // @ts-ignore
+            const links = Array.from(
+              document.querySelectorAll(`a[href*="${linkHref}"]`)
+            );
+            if (links.length > 0) link = links[0];
+          }
+          if (link) {
+            // @ts-ignore
+            link.click();
+          }
+        }, targetDocument.linkId, targetDocument.linkHref);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      // Aguardar download
+      try {
+        const downloadedFileName = await Promise.race([
+          downloadPromise,
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 30000)
+          ),
+        ]);
+
+        const filePath = path.join(this.downloadsDir, downloadedFileName);
+        const fileName = downloadedFileName;
+
+        console.log(`✅ Download concluído: ${fileName}`);
+
+        return {
+          success: true,
+          filePath: filePath,
+          fileName: fileName,
+          protocolNumber: cleanProtocol,
+          documentType: documentType,
+        };
+      } catch (downloadError: any) {
+        return {
+          success: false,
+          protocolNumber: cleanProtocol,
+          documentType: documentType,
+          error: `Erro ao aguardar download: ${downloadError.message}`,
+        };
+      }
+    } catch (error: any) {
+      console.error(
+        `❌ Erro ao baixar documento do processo ${protocolNumber}:`,
+        error
+      );
+      return {
+        success: false,
+        protocolNumber: protocolNumber,
+        documentType: documentType,
+        error: `Erro ao baixar documento: ${error.message}`,
+      };
+    } finally {
       if (page) {
         await page.close();
       }

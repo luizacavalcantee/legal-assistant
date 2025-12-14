@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import * as fs from "fs";
+import * as path from "path";
 import { LLMService } from "../services/LLMService";
 import { RAGChainService } from "../services/RAGChainService";
 import { IntentDetectionService, UserIntent } from "../services/IntentDetectionService";
@@ -115,12 +117,32 @@ export class ChatController {
                   ? `Erro: ${processResult.error}`
                   : "Verifique se o número do protocolo está correto.");
             } else {
-              // Processo encontrado - nas próximas etapas (10 e 11) será implementado
-              // o download do documento ou resumo do processo
+              // Processo encontrado - realizar ação solicitada
               if (intentResult.intention === UserIntent.DOWNLOAD_DOCUMENT) {
-                response =
-                  `Processo ${protocolNumber} encontrado no e-SAJ. ` +
-                  "A funcionalidade de download de documentos será implementada na próxima etapa.";
+                // Baixar documento (passando a URL da página de detalhes para evitar buscar novamente)
+                console.log(
+                  `📥 Iniciando download de documento${intentResult.documentType ? ` (${intentResult.documentType})` : ""}...`
+                );
+                const downloadResult = await this.eSAJService.downloadDocument(
+                  protocolNumber,
+                  intentResult.documentType || "documento",
+                  processResult.processPageUrl // Passar a URL da página de detalhes
+                );
+
+                if (downloadResult.success && downloadResult.fileName) {
+                  // Construir URL para download
+                  const fileId = downloadResult.fileName;
+                  downloadUrlResponse = `/chat/download/${encodeURIComponent(fileId)}`;
+                  fileNameResponse = downloadResult.fileName;
+
+                  response =
+                    `✅ Documento baixado com sucesso!\n\n` +
+                    `📄 Arquivo: ${downloadResult.fileName}\n` +
+                    `🔗 O documento está disponível para download.`;
+                } else {
+                  response =
+                    `❌ Erro ao baixar documento: ${downloadResult.error || "Erro desconhecido"}`;
+                }
               } else {
                 // SUMMARIZE_PROCESS
                 response =
@@ -224,6 +246,96 @@ export class ChatController {
 
       return res.status(500).json({
         error: "Erro interno do servidor ao processar a mensagem",
+        message: error.message,
+      });
+    }
+  }
+
+  /**
+   * Serve arquivos baixados do e-SAJ
+   */
+  async serveDownload(req: Request, res: Response): Promise<Response | void> {
+    try {
+      const { fileName } = req.params;
+
+      if (!fileName) {
+        return res.status(400).json({
+          error: "Nome do arquivo não fornecido",
+        });
+      }
+
+      // Decodificar nome do arquivo
+      const decodedFileName = decodeURIComponent(fileName);
+
+      // Diretório de downloads
+      const downloadsDir =
+        process.env.DOWNLOADS_DIR || path.join(process.cwd(), "downloads_esaj");
+      const filePath = path.join(downloadsDir, decodedFileName);
+
+      // Verificar se o arquivo existe
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({
+          error: "Arquivo não encontrado",
+          message: `O arquivo ${decodedFileName} não foi encontrado no servidor.`,
+        });
+      }
+
+      // Verificar se é um arquivo (não diretório)
+      const stats = fs.statSync(filePath);
+      if (!stats.isFile()) {
+        return res.status(400).json({
+          error: "Caminho inválido",
+          message: "O caminho fornecido não é um arquivo.",
+        });
+      }
+
+      // Determinar tipo MIME baseado na extensão
+      const ext = path.extname(decodedFileName).toLowerCase();
+      let contentType = "application/octet-stream";
+
+      switch (ext) {
+        case ".pdf":
+          contentType = "application/pdf";
+          break;
+        case ".zip":
+          contentType = "application/zip";
+          break;
+        case ".doc":
+          contentType = "application/msword";
+          break;
+        case ".docx":
+          contentType =
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          break;
+        case ".txt":
+          contentType = "text/plain";
+          break;
+      }
+
+      // Enviar arquivo
+      res.setHeader("Content-Type", contentType);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${decodedFileName}"`
+      );
+      res.setHeader("Content-Length", stats.size.toString());
+
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+
+      fileStream.on("error", (error) => {
+        console.error("Erro ao ler arquivo:", error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: "Erro ao ler arquivo",
+            message: error.message,
+          });
+        }
+      });
+    } catch (error: any) {
+      console.error("Erro ao servir arquivo:", error);
+      return res.status(500).json({
+        error: "Erro interno do servidor ao servir arquivo",
         message: error.message,
       });
     }
