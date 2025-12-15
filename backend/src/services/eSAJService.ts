@@ -1,4 +1,6 @@
 import { Page } from "puppeteer";
+import * as fs from "fs";
+import * as path from "path";
 import { eSAJBase } from "./esaj/eSAJBase";
 import {
   eSAJProcessSearcher,
@@ -240,6 +242,189 @@ export class eSAJService extends eSAJBase {
       protocolNumber,
       processPageUrl
     );
+  }
+
+  /**
+   * Clica no botão de download dentro do iframe da Pasta Digital e inicia o download
+   * 
+   * Este método assume que a página já está na "Pasta Digital" e o iframe#documento está carregado.
+   * 
+   * @param page - Página do Puppeteer já na página da Pasta Digital
+   * @returns Resultado com informações do download (caminho do arquivo, nome, etc.)
+   */
+  async downloadFromIframe(page: Page): Promise<{
+    success: boolean;
+    filePath?: string;
+    fileName?: string;
+    error?: string;
+  }> {
+    try {
+      console.log(`📥 Iniciando download do documento via iframe...`);
+
+      // ETAPA 1: Configurar página para downloads
+      console.log(`⚙️  Configurando página para downloads...`);
+      await this.setupPageForDownloads(page);
+
+      // ETAPA 2: Localizar o iframe #documento
+      console.log(`🔍 Procurando iframe #documento...`);
+      
+      // Aguardar o iframe aparecer na página
+      const iframe = await page.waitForSelector("iframe#documento", {
+        timeout: 30000,
+        visible: true,
+      });
+
+      if (!iframe) {
+        return {
+          success: false,
+          error: "Iframe #documento não encontrado na página",
+        };
+      }
+
+      console.log(`✅ Iframe #documento encontrado`);
+
+      // ETAPA 3: Acessar o contexto do iframe
+      console.log(`🔍 Acessando contexto do iframe...`);
+      
+      // Obter o frame do iframe usando contentFrame()
+      const iframeFrame = await iframe.contentFrame();
+
+      if (!iframeFrame) {
+        return {
+          success: false,
+          error: "Não foi possível acessar o contexto do iframe (contentFrame retornou null)",
+        };
+      }
+
+      console.log(`✅ Contexto do iframe acessado`);
+
+      // Aguardar o conteúdo do iframe carregar completamente
+      console.log(`⏳ Aguardando conteúdo do iframe carregar...`);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      // ETAPA 4: Localizar e clicar no botão de download
+      console.log(`🔍 Procurando botão #download dentro do iframe...`);
+      
+      // Aguardar o botão aparecer dentro do iframe
+      const downloadButton = await iframeFrame.waitForSelector("#download", {
+        timeout: 15000,
+        visible: true,
+      });
+
+      if (!downloadButton) {
+        return {
+          success: false,
+          error: "Botão #download não encontrado dentro do iframe",
+        };
+      }
+
+      console.log(`✅ Botão #download encontrado dentro do iframe`);
+
+      // Obter lista de arquivos antes do download
+      const filesBefore = fs.existsSync(this.downloadsDir)
+        ? fs.readdirSync(this.downloadsDir)
+        : [];
+
+      console.log(`📋 Arquivos antes do download: ${filesBefore.length}`);
+
+      // ETAPA 5: Clicar no botão de download
+      console.log(`🔘 Clicando no botão de download...`);
+      await downloadButton.click();
+      console.log(`✅ Botão de download clicado`);
+
+      // Aguardar um pouco para o download iniciar
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // ETAPA 6: Aguardar a conclusão do download
+      console.log(`⏳ Aguardando download completar...`);
+      
+      let downloadedFile: string | null = null;
+      const maxWaitTime = 60000; // 60 segundos
+      const checkInterval = 1000; // Verificar a cada 1 segundo
+      const startTime = Date.now();
+
+      while (Date.now() - startTime < maxWaitTime) {
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
+
+        if (fs.existsSync(this.downloadsDir)) {
+          const filesAfter = fs.readdirSync(this.downloadsDir);
+          
+          // Encontrar arquivo novo (não estava na lista antes)
+          const newFiles = filesAfter.filter(
+            (file) => !filesBefore.includes(file)
+          );
+
+          // Filtrar arquivos temporários (.crdownload, .tmp, etc.)
+          const completedFiles = newFiles.filter(
+            (file) =>
+              !file.endsWith(".crdownload") &&
+              !file.endsWith(".tmp") &&
+              !file.endsWith(".part")
+          );
+
+          if (completedFiles.length > 0) {
+            // Pegar o primeiro arquivo completo
+            downloadedFile = completedFiles[0];
+            console.log(`✅ Arquivo baixado encontrado: ${downloadedFile}`);
+            break;
+          }
+
+          // Verificar se ainda há arquivos sendo baixados
+          const downloadingFiles = newFiles.filter(
+            (file) =>
+              file.endsWith(".crdownload") ||
+              file.endsWith(".tmp") ||
+              file.endsWith(".part")
+          );
+
+          if (downloadingFiles.length === 0 && newFiles.length > 0) {
+            // Se não há mais arquivos sendo baixados, mas há arquivos novos, considerar completo
+            downloadedFile = newFiles[0];
+            console.log(`✅ Arquivo baixado encontrado: ${downloadedFile}`);
+            break;
+          }
+        }
+      }
+
+      if (!downloadedFile) {
+        return {
+          success: false,
+          error: "Timeout aguardando download completar (60 segundos). Nenhum arquivo novo foi encontrado no diretório de downloads.",
+        };
+      }
+
+      const filePath = path.join(this.downloadsDir, downloadedFile);
+      const fileName = downloadedFile;
+
+      // Verificar se o arquivo realmente existe e tem tamanho > 0
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        if (stats.size === 0) {
+          return {
+            success: false,
+            error: "Arquivo baixado está vazio (0 bytes)",
+          };
+        }
+        console.log(`✅ Download concluído: ${fileName} (${stats.size} bytes)`);
+      } else {
+        return {
+          success: false,
+          error: `Arquivo baixado não encontrado no caminho esperado: ${filePath}`,
+        };
+      }
+
+      return {
+        success: true,
+        filePath: filePath,
+        fileName: fileName,
+      };
+    } catch (error: any) {
+      console.error(`❌ Erro ao baixar documento via iframe:`, error);
+      return {
+        success: false,
+        error: `Erro ao baixar documento: ${error.message}`,
+      };
+    }
   }
 
   /**
