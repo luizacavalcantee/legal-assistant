@@ -315,14 +315,17 @@ export class eSAJMovementsExtractor extends eSAJBase {
         };
       }
 
+      // Limpeza básica do texto para otimizar consumo do LLM
+      const cleanedText = this.cleanMovementsText(movementsText);
+
       console.log(
-        `✅ Movimentações extraídas com sucesso (${movementsText.length} caracteres)`
+        `✅ Movimentações extraídas com sucesso (${cleanedText.length} caracteres, ${movementsText.length} antes da limpeza)`
       );
 
       return {
         success: true,
         protocolNumber: cleanProtocol,
-        movements: movementsText,
+        movements: cleanedText,
       };
     } catch (error: any) {
       console.error(
@@ -339,6 +342,35 @@ export class eSAJMovementsExtractor extends eSAJBase {
         await page.close();
       }
     }
+  }
+
+  /**
+   * Limpa o texto das movimentações removendo quebras de linha excessivas e espaços duplicados
+   * @param text - Texto bruto das movimentações
+   * @returns Texto limpo e otimizado
+   */
+  private cleanMovementsText(text: string): string {
+    if (!text) return "";
+
+    // Remover quebras de linha excessivas (mais de 2 consecutivas)
+    let cleaned = text.replace(/\n{3,}/g, "\n\n");
+
+    // Remover espaços em branco excessivos (mais de 2 consecutivos)
+    cleaned = cleaned.replace(/[ \t]{3,}/g, "  ");
+
+    // Remover espaços no início e fim de cada linha
+    cleaned = cleaned
+      .split("\n")
+      .map((line) => line.trim())
+      .join("\n");
+
+    // Remover linhas vazias no início e fim
+    cleaned = cleaned.trim();
+
+    // Garantir que há pelo menos uma quebra de linha entre seções
+    cleaned = cleaned.replace(/\n([A-Z])/g, "\n\n$1");
+
+    return cleaned;
   }
 }
 

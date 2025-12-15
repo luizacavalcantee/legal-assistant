@@ -4,6 +4,7 @@ export enum UserIntent {
   RAG_QUERY = "RAG_QUERY",
   DOWNLOAD_DOCUMENT = "DOWNLOAD_DOCUMENT",
   SUMMARIZE_PROCESS = "SUMMARIZE_PROCESS",
+  SUMMARIZE_DOCUMENT = "SUMMARIZE_DOCUMENT", // Resumo estruturado de um documento específico
   QUERY_DOCUMENT = "QUERY_DOCUMENT", // Perguntas sobre conteúdo de documentos de processos
   GENERAL_QUERY = "GENERAL_QUERY",
 }
@@ -34,7 +35,7 @@ export class IntentDetectionService {
     try {
       const prompt = `Analise a seguinte mensagem do usuário e identifique a intenção. Responda APENAS com um JSON válido no formato:
 {
-  "intention": "RAG_QUERY" | "DOWNLOAD_DOCUMENT" | "SUMMARIZE_PROCESS" | "QUERY_DOCUMENT" | "GENERAL_QUERY",
+  "intention": "RAG_QUERY" | "DOWNLOAD_DOCUMENT" | "SUMMARIZE_PROCESS" | "SUMMARIZE_DOCUMENT" | "QUERY_DOCUMENT" | "GENERAL_QUERY",
   "protocolNumber": "número do protocolo se relevante, ou null",
   "documentType": "tipo de documento se relevante (ex: 'sentença', 'petição inicial'), ou null",
   "confidence": número entre 0 e 1
@@ -53,9 +54,16 @@ Intenções:
 
 - SUMMARIZE_PROCESS: Solicitação de resumo de processo (ex: "Me traga um resumo do processo X", "Resuma o processo Y")
   * SEMPRE requer um número de protocolo na mensagem
+  * Resume TODAS as movimentações do processo
+
+- SUMMARIZE_DOCUMENT: Solicitação de resumo estruturado de um documento específico de um processo (ex: "Resuma a sentença do processo X", "Faça um resumo da petição inicial do processo Y")
+  * SEMPRE requer um número de protocolo na mensagem
+  * SEMPRE requer um tipo de documento (sentença, petição inicial, etc.)
+  * Gera resumo estruturado do documento específico
 
 - QUERY_DOCUMENT: Pergunta específica sobre o CONTEÚDO de um documento de um processo (ex: "Qual é o teor da sentença do processo X?", "O que diz a petição inicial do processo Y?")
   * SEMPRE requer um número de protocolo na mensagem
+  * Responde uma pergunta específica sobre o documento
 
 - GENERAL_QUERY: Use APENAS para perguntas completamente genéricas que não se relacionam com documentos indexados nem processos específicos
   * Exemplos: "Como está o tempo?", "Qual é a capital do Brasil?"
@@ -63,7 +71,8 @@ Intenções:
 REGRAS DE DECISÃO:
 1. Se a mensagem contém um número de protocolo (formato: NNNNNNN-DD.AAAA.J.TR.OOOO):
    - E menciona "baixar", "download", "obter documento" → DOWNLOAD_DOCUMENT
-   - E menciona "resumo", "resumir" → SUMMARIZE_PROCESS
+   - E menciona "resumo"/"resumir" E menciona tipo de documento (sentença, petição, etc.) → SUMMARIZE_DOCUMENT
+   - E menciona "resumo"/"resumir" SEM tipo de documento específico → SUMMARIZE_PROCESS
    - E menciona "o que diz", "qual é o teor", "conteúdo" → QUERY_DOCUMENT
    - Caso contrário → SUMMARIZE_PROCESS (padrão para processos)
 

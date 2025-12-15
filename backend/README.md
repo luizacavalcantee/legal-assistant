@@ -38,15 +38,38 @@ backend/
 │   │   ├── LLMService.ts    # Integração com LLM (OpenRouter/OpenAI)
 │   │   ├── EmbeddingService.ts  # Geração de embeddings
 │   │   ├── DocumentProcessor.ts  # Processamento e chunking de documentos
-│   │   └── IndexingService.ts  # Orquestração da indexação vetorial
+│   │   ├── IndexingService.ts  # Orquestração da indexação vetorial
+│   │   ├── RAGChainService.ts  # Orquestração de RAG com LangChain
+│   │   ├── IntentDetectionService.ts  # Detecção de intenção do usuário
+│   │   ├── eSAJService.ts  # Serviço principal e-SAJ (orquestrador)
+│   │   └── esaj/  # Módulos especializados e-SAJ
+│   │       ├── eSAJBase.ts  # Classe base (Puppeteer)
+│   │       ├── eSAJProcessSearcher.ts  # Busca de processos
+│   │       ├── eSAJProcessDataExtractor.ts  # Extração de movimentações
+│   │       ├── eSAJDocumentFinder.ts  # Localização de documentos
+│   │       ├── eSAJDocumentDownloader.ts  # Download de documentos
+│   │       ├── eSAJDocumentTextExtractor.ts  # Extração de texto de PDFs
+│   │       └── eSAJMovementsExtractor.ts  # Extração alternativa de movimentações
 │   ├── repositories/        # Acesso a dados
 │   │   └── DocumentRepository.ts
 │   ├── lib/                 # Bibliotecas/configurações
 │   │   ├── prisma.ts        # Cliente Prisma
-│   │   └── qdrant.ts        # Cliente Qdrant
+│   │   ├── qdrant.ts        # Cliente Qdrant
+│   │   └── langchain-adapters/  # Adaptadores LangChain
+│   │       ├── QdrantVectorStore.ts
+│   │       ├── CustomEmbeddings.ts
+│   │       ├── CustomChatOpenAI.ts
+│   │       └── CustomRetriever.ts
 │   ├── routes/              # Definição de rotas
 │   │   ├── documentRoutes.ts
-│   │   └── chatRoutes.ts
+│   │   ├── chatRoutes.ts
+│   │   └── downloadRoutes.ts
+│   ├── controllers/         # Controladores HTTP
+│   │   ├── DocumentController.ts
+│   │   ├── ChatController.ts
+│   │   └── DownloadController.ts
+│   ├── middleware/          # Middlewares
+│   │   └── upload.ts  # Multer para upload de arquivos
 │   ├── types/               # Tipos TypeScript
 │   │   ├── document.types.ts
 │   │   └── chat.types.ts
@@ -89,15 +112,11 @@ Acesse para ver todos os endpoints, testar requisições e ver exemplos de reque
 
 #### POST /documents
 
-Criar novo documento (US-BC-01)
+Criar novo documento com upload de arquivo (US-BC-01)
 
-**Request:**
-```json
-{
-  "titulo": "Lei 13.105/2015",
-  "caminho_arquivo": "/documentos/lei-13105-2015.pdf"
-}
-```
+**Request (multipart/form-data):**
+- `titulo`: string (obrigatório)
+- `file`: arquivo (PDF, TXT, MD, DOCX - máximo 10MB)
 
 **Response (201):**
 ```json
@@ -106,7 +125,7 @@ Criar novo documento (US-BC-01)
   "data": {
     "id": "uuid",
     "titulo": "Lei 13.105/2015",
-    "caminho_arquivo": "/documentos/lei-13105-2015.pdf",
+    "caminho_arquivo": "/documents/lei-13105-2015.pdf",
     "status_indexacao": "PENDENTE",
     "criado_em": "2025-12-12T20:00:00.000Z"
   }
@@ -121,7 +140,15 @@ Listar todos os documentos (US-BC-02)
 ```json
 {
   "message": "Documentos listados com sucesso",
-  "data": [...],
+  "data": [
+    {
+      "id": "uuid",
+      "titulo": "Lei 13.105/2015",
+      "caminho_arquivo": "/documents/lei-13105-2015.pdf",
+      "status_indexacao": "INDEXADO",
+      "criado_em": "2025-12-12T20:00:00.000Z"
+    }
+  ],
   "total": 10
 }
 ```
@@ -137,6 +164,14 @@ Buscar documento por ID
   "data": { ... }
 }
 ```
+
+#### GET /documents/:id/file
+
+Servir arquivo do documento
+
+**Response (200):**
+- Content-Type: `application/pdf` ou `text/plain`
+- Arquivo binário ou texto
 
 #### PUT /documents/:id
 
@@ -160,7 +195,7 @@ Atualizar documento (US-BC-03)
 
 #### DELETE /documents/:id
 
-Remover documento (US-BC-04)
+Remover documento (US-BC-04) - Remove também do Qdrant
 
 **Response (200):**
 ```json
@@ -169,25 +204,68 @@ Remover documento (US-BC-04)
 }
 ```
 
-### Chat com LLM
+### Chat com LLM, RAG e e-SAJ
 
 #### POST /chat/message
 
-Enviar mensagem para o assistente jurídico (LLM)
+Enviar mensagem para o assistente jurídico
+
+O sistema detecta automaticamente a intenção e roteia para:
+- **RAG_QUERY:** Busca na base de conhecimento
+- **DOWNLOAD_DOCUMENT:** Download de documento do e-SAJ
+- **SUMMARIZE_PROCESS:** Resumo de processo completo
+- **SUMMARIZE_DOCUMENT:** Resumo de documento específico
+- **QUERY_DOCUMENT:** Pergunta sobre conteúdo de documento
+- **GENERAL_QUERY:** Resposta genérica com LLM
 
 **Request:**
 ```json
 {
-  "message": "Qual é a definição de Habeas Corpus?"
+  "message": "Resuma o processo 1000822-06.2025.8.26.0451"
 }
 ```
 
-**Response (200):**
+**Response (200) - Resumo de Processo:**
 ```json
 {
-  "message": "Qual é a definição de Habeas Corpus?",
-  "response": "Habeas Corpus é um remédio constitucional que garante o direito de liberdade...",
-  "timestamp": "2025-12-13T10:30:00.000Z"
+  "message": "Resuma o processo 1000822-06.2025.8.26.0451",
+  "response": "📋 **Resumo do Processo 1000822-06.2025.8.26.0451**\n\n- **Status:** Em andamento\n- **Fase:** Conhecimento\n...",
+  "timestamp": "2025-12-13T10:30:00.000Z",
+  "intention": "SUMMARIZE_PROCESS",
+  "protocolNumber": "10008220620258260451"
+}
+```
+
+**Response (200) - Download de Documento:**
+```json
+{
+  "message": "Baixe a sentença do processo 1000822-06.2025.8.26.0451",
+  "response": "✅ Documento baixado com sucesso!\n\n📋 Nome do arquivo: sentenca_10008220620258260451_1765818630994.pdf",
+  "timestamp": "2025-12-13T10:30:00.000Z",
+  "intention": "DOWNLOAD_DOCUMENT",
+  "protocolNumber": "10008220620258260451",
+  "documentType": "sentença",
+  "downloadUrl": "http://localhost:3000/download/file/sentenca_10008220620258260451_1765818630994.pdf",
+  "fileName": "sentenca_10008220620258260451_1765818630994.pdf"
+}
+```
+
+**Response (200) - RAG Query:**
+```json
+{
+  "message": "Maria precisa pagar indenização?",
+  "response": "Com base nos documentos indexados...",
+  "timestamp": "2025-12-13T10:30:00.000Z",
+  "intention": "RAG_QUERY",
+  "sources": [
+    {
+      "document_id": "uuid",
+      "titulo": "Contrato de Trabalho",
+      "chunk_index": 5,
+      "score": 0.89,
+      "text": "Maria está obrigada a pagar indenização..."
+    }
+  ]
 }
 ```
 
@@ -197,6 +275,17 @@ Enviar mensagem para o assistente jurídico (LLM)
 - **429:** Rate limit ou quota excedida
 - **502:** Erro na comunicação com o serviço de IA
 - **500:** Erro interno do servidor
+
+### Download de Arquivos
+
+#### GET /download/file/:filename
+
+Baixar arquivo PDF baixado do e-SAJ
+
+**Response (200):**
+- Content-Type: `application/pdf`
+- Content-Disposition: `attachment; filename="documento.pdf"`
+- Arquivo binário do PDF
 
 ## 🗄️ Banco de Dados
 
@@ -326,7 +415,11 @@ LLM_MODEL="gpt-3.5-turbo"  # ou "gpt-4", "gpt-4-turbo", etc.
 - **Qdrant** - Banco vetorial para RAG
 - **@qdrant/js-client-rest** - Cliente Qdrant para Node.js
 - **OpenAI SDK** - Integração com modelos de linguagem e embeddings (compatível com OpenRouter)
+- **LangChain.js** - Orquestração de RAG e chains
 - **pdf-parse** - Parser de arquivos PDF
+- **Multer** - Middleware para upload de arquivos
+- **Puppeteer** - Automação de navegador para web scraping (e-SAJ)
+- **Axios** - Cliente HTTP para download de arquivos
 - **Swagger/OpenAPI** - Documentação interativa da API
 - **CORS** - Cross-Origin Resource Sharing
 
@@ -374,6 +467,19 @@ curl -X DELETE http://localhost:3000/documents/{id}
 curl -X POST http://localhost:3000/chat/message \
   -H "Content-Type: application/json" \
   -d '{"message":"Qual é a definição de Habeas Corpus?"}'
+
+# Resumo de processo
+curl -X POST http://localhost:3000/chat/message \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Resuma o processo 1000822-06.2025.8.26.0451"}'
+
+# Download de documento
+curl -X POST http://localhost:3000/chat/message \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Baixe a sentença do processo 1000822-06.2025.8.26.0451"}'
+
+# Download de arquivo
+curl http://localhost:3000/download/file/documento.pdf -o documento.pdf
 ```
 
 ### Com Swagger UI
@@ -421,9 +527,18 @@ Request → Controller → Service → Repository → Database
 ### LLM (Chat)
 - **Recomendado:** Use OpenRouter com modelos gratuitos para desenvolvimento
 - **API Key:** OpenRouter aceita `OPENROUTER_API_KEY` ou `OPENAI_API_KEY` quando `LLM_PROVIDER="openrouter"`
+- **Múltiplas Chaves:** Suporte para rotação automática (separar por vírgula: `"chave1,chave2,chave3"`)
 - **Modelo padrão:** `tngtech/deepseek-r1t-chimera:free` (OpenRouter)
 - **System Prompt:** Configurado no `LLMService.ts` como "assistente jurídico inteligente"
-- **Rate Limits:** Sem API key tem limites menores, com API key tem limites maiores
+- **Rate Limits:** Sem API key tem limites menores, com API key tem limites maiores (50 req/dia no plano gratuito)
+- **Tratamento de Erros:** Mensagens claras para quota excedida (429), autenticação (401), etc.
+
+### e-SAJ (Web Scraping)
+- **Puppeteer:** Automação de navegador para interagir com portal e-SAJ
+- **Modo Headless:** Configurável via `PUPPETEER_HEADLESS` (true/false)
+- **Otimizações:** Reutilização de navegador, evita buscas duplicadas
+- **Download:** Captura de cookies de sessão para download direto de PDFs
+- **Extração de Texto:** Suporte para PDFs com texto, detecção de PDFs escaneados
 
 ### RAG (Indexação Vetorial)
 - **Indexação automática:** Ao criar um documento via `POST /documents`, ele é automaticamente processado e indexado
@@ -463,15 +578,19 @@ Veja mais em: `TROUBLESHOOTING_LLM.md`
 | Endpoint | Método | Status | Descrição |
 |----------|--------|--------|-----------|
 | `/health` | GET | ✅ | Health check |
-| `/documents` | POST | ✅ | Criar documento |
+| `/documents` | POST | ✅ | Criar documento (com upload de arquivo) |
 | `/documents` | GET | ✅ | Listar documentos |
 | `/documents/:id` | GET | ✅ | Buscar documento |
+| `/documents/:id/file` | GET | ✅ | Servir arquivo do documento |
 | `/documents/:id` | PUT | ✅ | Atualizar documento |
 | `/documents/:id` | DELETE | ✅ | Remover documento (remove do Qdrant também) |
-| `/chat/message` | POST | ✅ | Chat com LLM |
+| `/chat/message` | POST | ✅ | Chat com LLM, RAG, e-SAJ (detecção automática de intenção) |
+| `/download/file/:filename` | GET | ✅ | Baixar arquivo PDF do e-SAJ |
 | `/api-docs` | GET | ✅ | Swagger UI |
 
-**Nota:** A indexação vetorial acontece automaticamente ao criar documentos. O status é atualizado de `PENDENTE` para `INDEXADO` ou `ERRO`.
+**Nota:** 
+- A indexação vetorial acontece automaticamente ao criar documentos. O status é atualizado de `PENDENTE` para `INDEXADO` ou `ERRO`.
+- O chat detecta automaticamente a intenção e roteia para RAG, e-SAJ ou LLM direto.
 
 ## 🔗 Links Úteis
 

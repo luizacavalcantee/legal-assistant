@@ -132,15 +132,105 @@ export class eSAJDocumentTextExtractor extends eSAJBase {
       );
 
       // 6. Extrair texto do PDF usando pdf-parse
-      const pdfData = await new PDFParse({ data: pdfBuffer });
-      const extractedText = pdfData.text || "";
+      console.log(`🔍 Tentando extrair texto do PDF...`);
+      let pdfData: any;
+      let extractedText: string = "";
 
-      if (!extractedText || extractedText.trim().length === 0) {
+      try {
+        // Criar instância do parser
+        pdfData = new PDFParse({ 
+          data: pdfBuffer,
+          verbosity: 0 // Reduzir verbosidade
+        });
+        
+        // Aguardar o carregamento completo do PDF
+        await pdfData.load();
+        
+        const numPages = pdfData.doc?.numPages || 0;
+        console.log(`📄 PDF carregado: ${numPages} página(s)`);
+        
+        // Extrair texto usando getText() - método recomendado do pdf-parse
+        try {
+          const textResult = await pdfData.getText({
+            parseHyperlinks: false,
+            parsePageInfo: false,
+            pageJoiner: "\n"
+          });
+          extractedText = textResult.text || "";
+        } catch (getTextError: any) {
+          console.log(`⚠️  Erro ao usar getText(), tentando método alternativo: ${getTextError.message}`);
+          // Fallback: tentar acessar text diretamente
+          extractedText = pdfData.text || "";
+        }
+        
+        // Se ainda não tem texto, tentar extrair página por página
+        if (!extractedText || extractedText.trim().length === 0) {
+          console.log(`⚠️  Texto não encontrado. Tentando extrair página por página...`);
+          
+          // Tentar extrair de cada página individualmente
+          const textParts: string[] = [];
+          for (let i = 1; i <= numPages; i++) {
+            try {
+              const pageResult = await pdfData.getText({
+                first: i,
+                last: i,
+                parseHyperlinks: false,
+                parsePageInfo: false
+              });
+              if (pageResult.text && pageResult.text.trim()) {
+                textParts.push(pageResult.text.trim());
+              }
+            } catch (pageError: any) {
+              console.log(`⚠️  Erro ao extrair texto da página ${i}: ${pageError.message}`);
+            }
+          }
+          
+          extractedText = textParts.join("\n\n");
+        }
+        
+        // Se ainda não conseguiu extrair texto
+        if (!extractedText || extractedText.trim().length === 0) {
+          console.log(`⚠️  PDF processado mas sem texto extraível. Páginas: ${numPages}`);
+          
+          // Verificar se há indicações de que é uma imagem escaneada
+          const isScanned = numPages > 0 && !extractedText;
+          
+          if (isScanned) {
+            console.log(`📸 PDF parece ser uma imagem escaneada (sem texto extraível)`);
+            return {
+              success: false,
+              protocolNumber: protocolNumber,
+              documentType: documentType,
+              error: "O PDF é uma imagem escaneada e não contém texto extraível. PDFs escaneados requerem OCR (reconhecimento óptico de caracteres) que não está disponível no momento. O documento foi baixado com sucesso, mas não é possível extrair o texto automaticamente.",
+            };
+          }
+          
+          return {
+            success: false,
+            protocolNumber: protocolNumber,
+            documentType: documentType,
+            error: `O PDF não contém texto extraível. O documento pode estar protegido, corrompido ou ser uma imagem escaneada. Tamanho do PDF: ${(pdfBuffer.length / 1024).toFixed(2)} KB, Páginas: ${numPages}. O arquivo foi baixado com sucesso, mas não foi possível extrair o texto.`,
+          };
+        }
+      } catch (parseError: any) {
+        console.error(`❌ Erro ao processar PDF com pdf-parse:`, parseError);
+        
+        // Verificar se é um erro específico de PDF
+        if (parseError.message?.includes("Invalid PDF") || parseError.message?.includes("corrupted")) {
+          return {
+            success: false,
+            protocolNumber: protocolNumber,
+            documentType: documentType,
+            error: `O PDF está corrompido ou em formato inválido: ${parseError.message}`,
+          };
+        }
+        
+        // Se o PDF foi baixado mas não pode ser processado, informar
         return {
           success: false,
           protocolNumber: protocolNumber,
           documentType: documentType,
-          error: "O PDF não contém texto extraível ou está vazio.",
+          error: `Erro ao processar PDF: ${parseError.message || "Erro desconhecido"}. O PDF foi baixado com sucesso (${(pdfBuffer.length / 1024).toFixed(2)} KB), mas não foi possível extrair o texto.`,
         };
       }
 

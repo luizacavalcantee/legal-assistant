@@ -22,6 +22,7 @@ import {
   eSAJDocumentTextExtractor,
   DocumentTextResult,
 } from "./esaj/eSAJDocumentTextExtractor";
+import { eSAJProcessDataExtractor } from "./esaj/eSAJProcessDataExtractor";
 
 // Re-exportar interfaces para manter compatibilidade
 export type {
@@ -40,6 +41,7 @@ export type {
  * - eSAJDocumentDownloader: Baixar documentos (extrair URL)
  * - eSAJMovementsExtractor: Extrair movimentações
  * - eSAJDocumentTextExtractor: Extrair texto de PDFs
+ * - eSAJProcessDataExtractor: Extrair dados do processo (scraping de dados não-documentais)
  */
 export class eSAJService extends eSAJBase {
   private processSearcher: eSAJProcessSearcher;
@@ -47,6 +49,7 @@ export class eSAJService extends eSAJBase {
   private documentDownloader: eSAJDocumentDownloader;
   private movementsExtractor: eSAJMovementsExtractor;
   private documentTextExtractor: eSAJDocumentTextExtractor;
+  private processDataExtractor: eSAJProcessDataExtractor;
 
   constructor() {
     super();
@@ -57,6 +60,7 @@ export class eSAJService extends eSAJBase {
     this.documentDownloader = new eSAJDocumentDownloader(this);
     this.movementsExtractor = new eSAJMovementsExtractor(this);
     this.documentTextExtractor = new eSAJDocumentTextExtractor(this);
+    this.processDataExtractor = new eSAJProcessDataExtractor(this);
   }
 
   /**
@@ -242,6 +246,103 @@ export class eSAJService extends eSAJBase {
       protocolNumber,
       processPageUrl
     );
+  }
+
+  /**
+   * Gera um resumo jurídico de um processo (orquestrador de alto nível)
+   * 
+   * Este método orquestra:
+   * 1. Busca do processo (eSAJProcessSearcher) - opcional se já tiver a URL
+   * 2. Extração de movimentações (eSAJProcessDataExtractor)
+   * 3. Geração de resumo (LLMService - deve ser chamado externamente)
+   * 
+   * @param protocolNumber - Número do protocolo do processo
+   * @param processPageUrl - URL opcional da página de detalhes (para evitar buscar novamente)
+   * @param existingPage - Página do Puppeteer já aberta (para reutilizar)
+   * @returns Texto completo das movimentações extraídas (pronto para ser enviado ao LLM)
+   * @throws Error se o processo não for encontrado ou se houver erro na extração
+   */
+  async getProcessMovementsForSummary(
+    protocolNumber: string,
+    processPageUrl?: string,
+    existingPage?: Page
+  ): Promise<string> {
+    let page: Page | null = null;
+    let shouldClosePage = true;
+
+    try {
+      console.log(
+        `📋 Iniciando extração de movimentações para resumo do processo ${protocolNumber}...`
+      );
+
+      // ETAPA 1: Obter página (reutilizar se disponível, senão buscar processo)
+      if (existingPage && !existingPage.isClosed()) {
+        // Reutilizar página existente
+        console.log(`♻️  Reutilizando página já aberta para extrair movimentações`);
+        page = existingPage;
+        shouldClosePage = false;
+        page.setDefaultTimeout(30000);
+      } else if (processPageUrl) {
+        // Navegar para URL fornecida
+        console.log(`📄 Navegando diretamente para a página de detalhes: ${processPageUrl}`);
+        const browser = await this.initBrowser();
+        page = await browser.newPage();
+        page.setDefaultTimeout(30000);
+
+        await page.goto(processPageUrl, {
+          waitUntil: "networkidle2",
+          timeout: 30000,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      } else {
+        // Buscar processo se não temos URL nem página
+        console.log(`🔍 Buscando processo no e-SAJ...`);
+        const searchResult = await this.processSearcher.findProcess(protocolNumber);
+
+        if (!searchResult.found || !searchResult.processPageUrl) {
+          throw new Error(
+            searchResult.error || "Processo não encontrado no e-SAJ"
+          );
+        }
+
+        // Reutilizar página da busca se disponível
+        if (searchResult.page && !searchResult.page.isClosed()) {
+          console.log(`♻️  Reutilizando página da busca do processo`);
+          page = searchResult.page;
+          shouldClosePage = false;
+          page.setDefaultTimeout(30000);
+        } else {
+          // Navegar para a página de detalhes
+          const browser = await this.initBrowser();
+          page = await browser.newPage();
+          page.setDefaultTimeout(30000);
+
+          await page.goto(searchResult.processPageUrl, {
+            waitUntil: "networkidle2",
+            timeout: 30000,
+          });
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
+
+      // ETAPA 2: Extrair movimentações usando o novo componente
+      const movementsText = await this.processDataExtractor.extractMovementsText(
+        page
+      );
+
+      return movementsText;
+    } catch (error: any) {
+      console.error(
+        `❌ Erro ao extrair movimentações para resumo do processo ${protocolNumber}:`,
+        error
+      );
+      throw error;
+    } finally {
+      // Só fechar a página se não foi reutilizada
+      if (page && shouldClosePage && !page.isClosed()) {
+        await page.close();
+      }
+    }
   }
 
   /**

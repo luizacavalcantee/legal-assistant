@@ -14,23 +14,35 @@ export class DocumentController {
    * @swagger
    * /documents:
    *   post:
-   *     summary: Criar novo documento (US-BC-01)
+   *     summary: Criar novo documento com upload de arquivo (US-BC-01)
    *     tags: [Documents]
    *     requestBody:
    *       required: true
    *       content:
-   *         application/json:
+   *         multipart/form-data:
    *           schema:
-   *             $ref: '#/components/schemas/CreateDocumentDto'
+   *             type: object
+   *             required:
+   *               - titulo
+   *               - file
+   *             properties:
+   *               titulo:
+   *                 type: string
+   *                 description: Título do documento
+   *                 example: "Lei 13.105/2015"
+   *               file:
+   *                 type: string
+   *                 format: binary
+   *                 description: Arquivo a ser enviado (PDF, TXT, MD, DOCX - máximo 10MB)
    *     responses:
    *       201:
-   *         description: Documento criado com sucesso
+   *         description: Documento criado com sucesso (indexação iniciada em background)
    *         content:
    *           application/json:
    *             schema:
    *               $ref: '#/components/schemas/SuccessResponse'
    *       400:
-   *         description: Dados inválidos
+   *         description: Dados inválidos ou arquivo não fornecido
    *         content:
    *           application/json:
    *             schema:

@@ -24,38 +24,46 @@ export class ChatController {
     this.eSAJService = eSAJService || new eSAJService();
   }
 
-  /**
-   * @swagger
-   * /chat/message:
-   *   post:
-   *     summary: Enviar mensagem para o assistente jurídico (LLM)
-   *     tags: [Chat]
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             $ref: '#/components/schemas/ChatMessageRequest'
-   *     responses:
-   *       200:
-   *         description: Resposta gerada pelo LLM com sucesso
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ChatMessageResponse'
-   *       400:
-   *         description: Mensagem não fornecida ou inválida
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   *       500:
-   *         description: Erro interno do servidor ou na comunicação com o LLM
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   */
+      /**
+       * @swagger
+       * /chat/message:
+       *   post:
+       *     summary: Enviar mensagem para o assistente jurídico (LLM, RAG, e-SAJ)
+       *     description: |
+       *       O sistema detecta automaticamente a intenção do usuário e roteia para:
+       *       - **RAG_QUERY:** Busca na base de conhecimento indexada
+       *       - **DOWNLOAD_DOCUMENT:** Download de documento do e-SAJ
+       *       - **SUMMARIZE_PROCESS:** Resumo completo de processo judicial
+       *       - **SUMMARIZE_DOCUMENT:** Resumo de documento específico do processo
+       *       - **QUERY_DOCUMENT:** Pergunta sobre conteúdo de documento
+       *       - **GENERAL_QUERY:** Resposta genérica com LLM
+       *     tags: [Chat]
+       *     requestBody:
+       *       required: true
+       *       content:
+       *         application/json:
+       *           schema:
+       *             $ref: '#/components/schemas/ChatMessageRequest'
+       *     responses:
+       *       200:
+       *         description: Resposta gerada com sucesso (pode incluir resumo, download, RAG, etc.)
+       *         content:
+       *           application/json:
+       *             schema:
+       *               $ref: '#/components/schemas/ChatMessageResponse'
+       *       400:
+       *         description: Mensagem não fornecida ou inválida
+       *         content:
+       *           application/json:
+       *             schema:
+       *               $ref: '#/components/schemas/ErrorResponse'
+       *       500:
+       *         description: Erro interno do servidor ou na comunicação com o LLM/e-SAJ
+       *         content:
+       *           application/json:
+       *             schema:
+       *               $ref: '#/components/schemas/ErrorResponse'
+       */
   async handleChatRequest(req: Request, res: Response): Promise<Response> {
     try {
       const { message }: ChatMessageRequest = req.body;
@@ -99,6 +107,7 @@ export class ChatController {
         case UserIntent.QUERY_DOCUMENT:
         case UserIntent.DOWNLOAD_DOCUMENT:
         case UserIntent.SUMMARIZE_PROCESS:
+        case UserIntent.SUMMARIZE_DOCUMENT:
           // Verificar se há número de protocolo
           if (!protocolNumber) {
             response =
@@ -203,36 +212,81 @@ export class ChatController {
                       `❌ Erro ao responder pergunta sobre o documento: ${answerError.message || "Erro desconhecido"}`;
                   }
                 }
+              } else if (intentResult.intention === UserIntent.SUMMARIZE_DOCUMENT) {
+                // SUMMARIZE_DOCUMENT - Resumo estruturado de um documento específico
+                console.log(
+                  `📄 Iniciando extração e resumo do documento${intentResult.documentType ? ` (${intentResult.documentType})` : ""} do processo ${protocolNumber}...`
+                );
+                const textResult = await this.eSAJService.extractDocumentText(
+                  protocolNumber,
+                  intentResult.documentType || "documento",
+                  processResult.processPageUrl // Passar a URL da página de detalhes
+                );
+
+                if (!textResult.success || !textResult.text) {
+                  response =
+                    `❌ Erro ao extrair texto do documento: ${textResult.error || "Erro desconhecido"}`;
+                } else {
+                  console.log(
+                    `✅ Texto extraído (${textResult.text.length} caracteres). Gerando resumo estruturado com LLM...`
+                  );
+                  try {
+                    const summary = await this.llmService.summarizeDocument(
+                      textResult.text,
+                      textResult.documentType || intentResult.documentType,
+                      protocolNumber
+                    );
+                    response = `📄 **Resumo do Documento${textResult.documentType ? ` (${textResult.documentType})` : ""} do Processo ${protocolNumber}**\n\n${summary}`;
+                  } catch (summaryError: any) {
+                    console.error(
+                      `❌ Erro ao gerar resumo do documento:`,
+                      summaryError
+                    );
+                    response =
+                      `❌ Erro ao gerar resumo do documento: ${summaryError.message || "Erro desconhecido"}`;
+                  }
+                }
               } else {
                 // SUMMARIZE_PROCESS
                 console.log(
                   `📋 Iniciando extração de movimentações do processo ${protocolNumber}...`
                 );
-                const movementsResult = await this.eSAJService.extractMovements(
-                  protocolNumber,
-                  processResult.processPageUrl // Passar a URL da página de detalhes
-                );
-
-                if (!movementsResult.success || !movementsResult.movements) {
-                  response =
-                    `❌ Erro ao extrair movimentações do processo: ${movementsResult.error || "Erro desconhecido"}`;
-                } else {
-                  console.log(
-                    `✅ Movimentações extraídas (${movementsResult.movements.length} caracteres). Gerando resumo com LLM...`
+                try {
+                  // Usar o método orquestrador, reutilizando a página já aberta
+                  const movementsText = await this.eSAJService.getProcessMovementsForSummary(
+                    protocolNumber,
+                    processResult.processPageUrl, // Passar URL para evitar busca duplicada
+                    processResult.page // Passar página para reutilizar
                   );
-                  try {
-                    const summary = await this.llmService.summarizeProcess(
-                      movementsResult.movements
-                    );
-                    response = `📋 **Resumo do Processo ${protocolNumber}**\n\n${summary}`;
-                  } catch (summaryError: any) {
-                    console.error(
-                      `❌ Erro ao gerar resumo:`,
-                      summaryError
-                    );
+
+                  if (!movementsText || movementsText.trim().length === 0) {
                     response =
-                      `❌ Erro ao gerar resumo do processo: ${summaryError.message || "Erro desconhecido"}`;
+                      `❌ Erro ao extrair movimentações do processo: Nenhuma movimentação encontrada.`;
+                  } else {
+                    console.log(
+                      `✅ Movimentações extraídas (${movementsText.length} caracteres). Gerando resumo com LLM...`
+                    );
+                    try {
+                      const summary = await this.llmService.summarizeProcess(
+                        movementsText
+                      );
+                      response = `📋 **Resumo do Processo ${protocolNumber}**\n\n${summary}`;
+                    } catch (summaryError: any) {
+                      console.error(
+                        `❌ Erro ao gerar resumo:`,
+                        summaryError
+                      );
+                      response =
+                        `❌ Erro ao gerar resumo do processo: ${summaryError.message || "Erro desconhecido"}`;
+                    }
                   }
+                } catch (extractionError: any) {
+                  console.error(
+                    `❌ Erro ao extrair movimentações:`,
+                    extractionError
+                  );
+                  response =
+                    `❌ Erro ao extrair movimentações do processo: ${extractionError.message || "Erro desconhecido"}`;
                 }
               }
             }
