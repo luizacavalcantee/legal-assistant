@@ -402,7 +402,7 @@ NODE_OPTIONS=--max-old-space-size=8192
 - **Etapa 7 - Chat com RAG:** [`DOCUMENTACAO_ETAPA_7_RAG_CHAT.md`](./DOCUMENTACAO_ETAPA_7_RAG_CHAT.md) - Documentação da integração RAG no chat usando LangChain.js
 - **Etapa 8 - Status de Indexação:** [`DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md`](./DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md) - Documentação da visualização e atualização automática do status de indexação
 - **Etapa 9 - e-SAJ e Identificação de Intenção:** [`DOCUMENTACAO_ETAPA_9_ESAJ_INTENT.md`](./DOCUMENTACAO_ETAPA_9_ESAJ_INTENT.md) - Documentação da integração com e-SAJ e sistema de identificação de intenção
-- **Etapa 10 - Download de Documentos do e-SAJ:** [`DOCUMENTACAO_ETAPA_10_ESAJ_DOWNLOAD.md`](./DOCUMENTACAO_ETAPA_10_ESAJ_DOWNLOAD.md) - Documentação da extração de URLs de documentos do e-SAJ (⚠️ download direto não implementado - limitação de sessão)
+- **Etapa 10 - Download de Documentos do e-SAJ:** [`DOCUMENTACAO_ETAPA_10_ESAJ_DOWNLOAD.md`](./DOCUMENTACAO_ETAPA_10_ESAJ_DOWNLOAD.md) - Documentação completa do download de documentos do e-SAJ, incluindo listagem, download direto com cookies, tratamento de erros e integração com chat
 - **Serviços e-SAJ - Arquitetura Modular:** [`DOCUMENTACAO_ESAJ_SERVICES.md`](./DOCUMENTACAO_ESAJ_SERVICES.md) - Documentação completa da arquitetura modular dos serviços e-SAJ, incluindo todos os módulos, fluxos de execução e otimizações
 - **Swagger/API Docs:** http://localhost:3000/api-docs - Documentação interativa da API
 
