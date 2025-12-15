@@ -41,18 +41,40 @@ export class IntentDetectionService {
 }
 
 Intenções:
-- RAG_QUERY: Pergunta sobre a base de conhecimento interna, documentos indexados, leis, normas, etc.
-- DOWNLOAD_DOCUMENT: Solicitação de download de documento de um processo (ex: "Baixe a petição inicial do processo X", "Quero o documento Y do processo Z")
-- SUMMARIZE_PROCESS: Solicitação de resumo de processo (ex: "Me traga um resumo do processo X", "Resuma o processo Y")
-- QUERY_DOCUMENT: Pergunta específica sobre o CONTEÚDO de um documento de um processo (ex: "Qual é o teor da sentença do processo X?", "O que diz a petição inicial do processo Y?", "Quais são os pedidos na inicial do processo Z?")
-- GENERAL_QUERY: Pergunta genérica que não se encaixa nas outras categorias
+- RAG_QUERY: Use esta intenção quando a pergunta pode ser respondida com base nos documentos indexados na base de conhecimento. Isso inclui:
+  * Perguntas sobre pessoas, empresas, situações específicas mencionadas nos documentos
+  * Perguntas sobre conceitos jurídicos, leis, normas, jurisprudência
+  * Perguntas sobre informações que podem estar nos documentos indexados
+  * Qualquer pergunta que NÃO menciona um número de protocolo específico e pode ser respondida consultando a base de conhecimento
+  Exemplos: "Maria precisa pagar indenização?", "O que é habeas corpus?", "Quais são os requisitos para aposentadoria?"
 
-IMPORTANTE:
-- Se a intenção for DOWNLOAD_DOCUMENT, SUMMARIZE_PROCESS ou QUERY_DOCUMENT, você DEVE extrair o número do protocolo da mensagem
-- Para QUERY_DOCUMENT, também tente identificar o tipo de documento mencionado (sentença, petição inicial, etc.)
-- Números de protocolo geralmente seguem o formato: NNNNNNN-DD.AAAA.J.TR.OOOO (ex: 1234567-89.2024.8.26.0100)
-- Se não conseguir identificar claramente a intenção, use GENERAL_QUERY
-- Retorne APENAS o JSON, sem texto adicional
+- DOWNLOAD_DOCUMENT: Solicitação de download de documento de um processo (ex: "Baixe a petição inicial do processo X", "Quero o documento Y do processo Z")
+  * SEMPRE requer um número de protocolo na mensagem
+
+- SUMMARIZE_PROCESS: Solicitação de resumo de processo (ex: "Me traga um resumo do processo X", "Resuma o processo Y")
+  * SEMPRE requer um número de protocolo na mensagem
+
+- QUERY_DOCUMENT: Pergunta específica sobre o CONTEÚDO de um documento de um processo (ex: "Qual é o teor da sentença do processo X?", "O que diz a petição inicial do processo Y?")
+  * SEMPRE requer um número de protocolo na mensagem
+
+- GENERAL_QUERY: Use APENAS para perguntas completamente genéricas que não se relacionam com documentos indexados nem processos específicos
+  * Exemplos: "Como está o tempo?", "Qual é a capital do Brasil?"
+
+REGRAS DE DECISÃO:
+1. Se a mensagem contém um número de protocolo (formato: NNNNNNN-DD.AAAA.J.TR.OOOO):
+   - E menciona "baixar", "download", "obter documento" → DOWNLOAD_DOCUMENT
+   - E menciona "resumo", "resumir" → SUMMARIZE_PROCESS
+   - E menciona "o que diz", "qual é o teor", "conteúdo" → QUERY_DOCUMENT
+   - Caso contrário → SUMMARIZE_PROCESS (padrão para processos)
+
+2. Se a mensagem NÃO contém número de protocolo:
+   - Se é uma pergunta sobre pessoas, situações, conceitos jurídicos, ou informações que podem estar nos documentos → RAG_QUERY
+   - Se é uma pergunta completamente genérica sem relação com documentos → GENERAL_QUERY
+   - Em caso de dúvida, prefira RAG_QUERY sobre GENERAL_QUERY
+
+3. Números de protocolo geralmente seguem o formato: NNNNNNN-DD.AAAA.J.TR.OOOO (ex: 1234567-89.2024.8.26.0100)
+
+4. Retorne APENAS o JSON, sem texto adicional
 
 Mensagem do usuário: "${message}"`;
 

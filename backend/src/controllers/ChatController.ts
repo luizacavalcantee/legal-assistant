@@ -275,9 +275,45 @@ export class ChatController {
 
         case UserIntent.GENERAL_QUERY:
         default:
-          // Usar LLM direto para perguntas genéricas
-          console.log("💬 Usando LLM direto para pergunta genérica...");
-          response = await this.llmService.generateResponse(message.trim());
+          // Se não há número de protocolo, tentar RAG primeiro (pode ser pergunta sobre base de conhecimento)
+          if (!protocolNumber && this.ragChainService) {
+            try {
+              const isRAGAvailable =
+                await this.ragChainService.isAvailable();
+
+              if (isRAGAvailable) {
+                console.log(
+                  "🔍 Tentando RAG para pergunta genérica (pode estar na base de conhecimento)..."
+                );
+                const ragResult = await this.ragChainService.query(
+                  message.trim()
+                );
+                response = ragResult.answer;
+                sources = ragResult.sources;
+                // Atualizar intenção para RAG_QUERY se funcionou
+                intentResult.intention = UserIntent.RAG_QUERY;
+              } else {
+                console.log(
+                  "💬 RAG não disponível. Usando LLM direto para pergunta genérica..."
+                );
+                response = await this.llmService.generateResponse(
+                  message.trim()
+                );
+              }
+            } catch (ragError: any) {
+              console.log(
+                "💬 Erro ao usar RAG, usando LLM direto para pergunta genérica:",
+                ragError.message
+              );
+              response = await this.llmService.generateResponse(
+                message.trim()
+              );
+            }
+          } else {
+            // Usar LLM direto para perguntas genéricas
+            console.log("💬 Usando LLM direto para pergunta genérica...");
+            response = await this.llmService.generateResponse(message.trim());
+          }
           break;
       }
 
