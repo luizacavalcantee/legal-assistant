@@ -7,7 +7,7 @@ const swaggerDefinition: SwaggerDefinition = {
     title: "Assistente Jurídico API",
     version: "1.0.0",
     description:
-      "API REST para gerenciamento de documentos da Base de Conhecimento",
+      "API REST para Assistente Jurídico Inteligente com RAG, integração e-SAJ, resumo de processos e download de documentos",
     contact: {
       name: "Assistente Jurídico",
     },
@@ -29,7 +29,11 @@ const swaggerDefinition: SwaggerDefinition = {
     },
     {
       name: "Chat",
-      description: "Endpoints para comunicação com o assistente jurídico (LLM)",
+      description: "Endpoints para comunicação com o assistente jurídico (LLM, RAG, e-SAJ)",
+    },
+    {
+      name: "Downloads",
+      description: "Endpoints para download de arquivos baixados do e-SAJ",
     },
   ],
   components: {
@@ -174,7 +178,7 @@ const swaggerDefinition: SwaggerDefinition = {
           },
           response: {
             type: "string",
-            description: "Resposta gerada pelo modelo de linguagem",
+            description: "Resposta gerada pelo modelo de linguagem ou resultado da operação",
             example:
               "Habeas Corpus é um remédio constitucional que garante o direito de liberdade...",
           },
@@ -183,6 +187,62 @@ const swaggerDefinition: SwaggerDefinition = {
             format: "date-time",
             description: "Data e hora da resposta",
             example: "2025-12-13T10:30:00.000Z",
+          },
+          intention: {
+            type: "string",
+            enum: ["RAG_QUERY", "DOWNLOAD_DOCUMENT", "SUMMARIZE_PROCESS", "SUMMARIZE_DOCUMENT", "QUERY_DOCUMENT", "GENERAL_QUERY"],
+            description: "Intenção detectada do usuário",
+            example: "RAG_QUERY",
+          },
+          protocolNumber: {
+            type: "string",
+            description: "Número do protocolo do processo (se relevante)",
+            example: "1000822-06.2025.8.26.0451",
+          },
+          documentType: {
+            type: "string",
+            description: "Tipo de documento solicitado (se relevante)",
+            example: "sentença",
+          },
+          downloadUrl: {
+            type: "string",
+            format: "uri",
+            description: "URL para download do arquivo (se aplicável)",
+            example: "http://localhost:3000/download/file/documento.pdf",
+          },
+          fileName: {
+            type: "string",
+            description: "Nome do arquivo baixado (se aplicável)",
+            example: "sentenca_10008220620258260451_1765818630994.pdf",
+          },
+          sources: {
+            type: "array",
+            description: "Fontes dos documentos utilizados na resposta (RAG)",
+            items: {
+              type: "object",
+              properties: {
+                document_id: {
+                  type: "string",
+                  description: "ID do documento",
+                },
+                titulo: {
+                  type: "string",
+                  description: "Título do documento",
+                },
+                chunk_index: {
+                  type: "number",
+                  description: "Índice do chunk utilizado",
+                },
+                score: {
+                  type: "number",
+                  description: "Score de similaridade",
+                },
+                text: {
+                  type: "string",
+                  description: "Trecho do documento utilizado",
+                },
+              },
+            },
           },
         },
         required: ["message", "response", "timestamp"],

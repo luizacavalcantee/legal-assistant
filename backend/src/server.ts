@@ -5,6 +5,7 @@ import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
 import documentRoutes from "./routes/documentRoutes";
 import chatRoutes from "./routes/chatRoutes";
+import downloadRoutes from "./routes/downloadRoutes";
 
 dotenv.config();
 
@@ -53,6 +54,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // Rotas da API
 app.use("/documents", documentRoutes);
 app.use("/chat", chatRoutes);
+app.use("/download", downloadRoutes);
 
 // Iniciar servidor
 app.listen(PORT, () => {
@@ -63,6 +65,9 @@ app.listen(PORT, () => {
   );
   console.log(
     `💬 Chat API disponível em http://localhost:${PORT}/chat/message`
+  );
+  console.log(
+    `📥 Download API disponível em http://localhost:${PORT}/download/file/:filename`
   );
   console.log(`📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`);
   console.log(`🔍 RAG: Indexação vetorial ${process.env.QDRANT_URL ? "habilitada" : "desabilitada"}`);

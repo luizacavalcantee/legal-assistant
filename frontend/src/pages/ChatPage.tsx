@@ -23,6 +23,52 @@ export function ChatPage() {
     scrollToBottom();
   }, [messages, isLoading]);
 
+  // Função para detectar e extrair link de download da resposta
+  const extractDownloadLink = (text: string): string | null => {
+    // Procurar por padrão: http://.../download/file/... ou https://.../download/file/...
+    const downloadPattern = /https?:\/\/[^\s\n]+\/download\/file\/([^\s\n\)]+)/;
+    const match = text.match(downloadPattern);
+    return match ? match[0] : null;
+  };
+
+  // Função para fazer download automático do arquivo
+  const downloadFile = async (url: string, fileName: string) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Erro ao baixar arquivo: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Erro ao fazer download:", error);
+    }
+  };
+
+  // Função para limpar mensagem removendo link e mantendo apenas informações essenciais
+  const cleanDownloadMessage = (text: string): string => {
+    // Extrair nome do arquivo se presente
+    const fileNameMatch = text.match(/📋 Nome do arquivo: ([^\n]+)/);
+    const fileName = fileNameMatch ? fileNameMatch[1] : null;
+
+    // Retornar mensagem limpa
+    if (fileName) {
+      return `✅ Documento baixado com sucesso!\n\n📋 Nome do arquivo: ${fileName}`;
+    }
+
+    // Se não encontrar nome do arquivo, retornar apenas a primeira linha de sucesso
+    const successMatch = text.match(/✅[^\n]+/);
+    return successMatch ? successMatch[0] : text;
+  };
+
   const handleSendMessage = async (message: string) => {
     // Adicionar mensagem do usuário ao histórico
     const userMessage: ChatMessage = {
@@ -40,11 +86,26 @@ export function ChatPage() {
       // Chamar API do backend
       const response = await chatService.sendMessage({ message });
 
+      // Verificar se há link de download na resposta
+      const downloadLink = extractDownloadLink(response.response);
+      let displayContent = response.response;
+
+      if (downloadLink) {
+        // Extrair nome do arquivo da URL
+        const fileName = downloadLink.split("/").pop() || "documento.pdf";
+
+        // Fazer download automático
+        await downloadFile(downloadLink, decodeURIComponent(fileName));
+
+        // Limpar mensagem para mostrar apenas informações essenciais
+        displayContent = cleanDownloadMessage(response.response);
+      }
+
       // Adicionar resposta da IA ao histórico
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: response.response,
+        content: displayContent,
         timestamp: response.timestamp,
       };
 
@@ -87,9 +148,12 @@ export function ChatPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">Assistente Jurídico Inteligente</h1>
+            <h1 className="text-2xl font-bold">
+              Assistente Jurídico Inteligente
+            </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Faça perguntas sobre questões jurídicas e receba respostas precisas
+              Faça perguntas sobre questões jurídicas e receba respostas
+              precisas
             </p>
           </div>
         </div>
@@ -111,11 +175,7 @@ export function ChatPage() {
       </div>
 
       {/* Campo de Entrada */}
-      <MessageInput
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-      />
+      <MessageInput onSendMessage={handleSendMessage} isLoading={isLoading} />
     </div>
   );
 }
-

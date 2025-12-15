@@ -106,7 +106,7 @@ export function DocumentTable({
     <div className="rounded-md border">
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="text-teal-950">
             <TableHead>Título</TableHead>
             <TableHead>Caminho do Arquivo</TableHead>
             <TableHead>Status de Indexação</TableHead>
