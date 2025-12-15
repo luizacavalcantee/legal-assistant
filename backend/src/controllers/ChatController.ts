@@ -139,7 +139,9 @@ export class ChatController {
                   response =
                     `✅ Documento encontrado!\n\n` +
                     `📄 Veja o documento clicando no link abaixo:\n` +
-                    `${downloadResult.pdfUrl}`;
+                    `${downloadResult.pdfUrl}\n\n` +
+                    `⚠️ **Atenção:** Esta URL pode expirar após alguns minutos devido à sessão do e-SAJ. ` +
+                    `Acesse o link o mais rápido possível.`;
                 } else {
                   response =
                     `❌ Erro ao localizar documento: ${downloadResult.error || "Erro desconhecido"}`;

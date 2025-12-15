@@ -312,11 +312,15 @@ export class eSAJService {
   }
 
   /**
-   * Baixa um documento específico de um processo no e-SAJ
+   * Extrai a URL do PDF de um documento específico de um processo no e-SAJ
+   *
+   * ⚠️ NOTA: Este método NÃO realiza download direto do arquivo. Ele apenas extrai e retorna
+   * a URL do PDF, que pode expirar devido a limitações de sessão do e-SAJ.
+   *
    * @param protocolNumber - Número do protocolo do processo
    * @param documentType - Tipo de documento solicitado (ex: "petição inicial", "sentença")
    * @param processPageUrl - URL opcional da página de detalhes do processo (para evitar buscar novamente)
-   * @returns Resultado do download com caminho do arquivo
+   * @returns Resultado com URL do PDF (não realiza download direto)
    */
   async downloadDocument(
     protocolNumber: string,
