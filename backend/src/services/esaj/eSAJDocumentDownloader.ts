@@ -1,6 +1,7 @@
 import { Page } from "puppeteer";
 import * as fs from "fs";
 import * as path from "path";
+import axios from "axios";
 import { eSAJBase } from "./eSAJBase";
 import { DocumentCandidate } from "./eSAJDocumentFinder";
 
@@ -518,10 +519,13 @@ export class eSAJDocumentDownloader extends eSAJBase {
                   if (match && match[1]) {
                     // Os parâmetros são: event, this, 'CJ000VN2E0000', 36, '/cpopg/...'
                     // Vamos executar a função diretamente
-                    // @ts-ignore
+                    // @ts-ignore - window está disponível no contexto do navegador
                     if (
+                      // @ts-ignore
                       window.jQuery &&
+                      // @ts-ignore
                       window.jQuery.saj &&
+                      // @ts-ignore
                       window.jQuery.saj.validarAberturaIntimacaoNaoRecebida
                     ) {
                       // @ts-ignore
@@ -673,6 +677,7 @@ export class eSAJDocumentDownloader extends eSAJBase {
           // Aguardar mudança de URL
           page.waitForFunction(
             (oldUrl) => {
+              // @ts-ignore - window está disponível no contexto do navegador
               // @ts-ignore
               return window.location.href !== oldUrl;
             },
@@ -737,62 +742,10 @@ export class eSAJDocumentDownloader extends eSAJBase {
       ) {
         console.log(`✅ Página da pasta digital carregada com sucesso`);
 
-        // Se o iframe está presente, clicar no botão de download dentro dele
+        // Se o iframe está presente, apenas confirmar que está carregado
+        // A extração da URL e download serão feitos no método downloadDocument
         if (pastaDigitalElements.hasIframe) {
-          console.log(`🔍 Procurando iframe #documento...`);
-
-          // Aguardar o iframe aparecer e carregar
-          const iframe = await page.waitForSelector("iframe#documento", {
-            timeout: 10000,
-          });
-
-          if (iframe) {
-            console.log(`✅ Iframe #documento encontrado`);
-
-            // Obter o frame do iframe
-            const iframeFrame = await iframe.contentFrame();
-
-            if (iframeFrame) {
-              console.log(`✅ Frame do iframe obtido`);
-
-              // Aguardar o botão de download aparecer dentro do iframe
-              console.log(`🔍 Aguardando botão #download dentro do iframe...`);
-
-              try {
-                const downloadButton = await iframeFrame.waitForSelector(
-                  "#download",
-                  {
-                    timeout: 15000,
-                    visible: true,
-                  }
-                );
-
-                if (downloadButton) {
-                  console.log(`✅ Botão #download encontrado dentro do iframe`);
-
-                  // Clicar no botão de download
-                  await downloadButton.click();
-                  console.log(`✅ Botão de download clicado`);
-
-                  // Aguardar um pouco para o download iniciar
-                  await new Promise((resolve) => setTimeout(resolve, 2000));
-                  console.log(`✅ Download iniciado`);
-                } else {
-                  console.log(
-                    `⚠️  Botão #download não encontrado dentro do iframe`
-                  );
-                }
-              } catch (buttonError: any) {
-                console.log(
-                  `⚠️  Erro ao encontrar/clicar no botão de download: ${buttonError.message}`
-                );
-              }
-            } else {
-              console.log(`⚠️  Não foi possível obter o frame do iframe`);
-            }
-          } else {
-            console.log(`⚠️  Iframe #documento não encontrado`);
-          }
+          console.log(`✅ Iframe #documento detectado na página`);
         }
 
         return true;
@@ -805,6 +758,153 @@ export class eSAJDocumentDownloader extends eSAJBase {
     } catch (error: any) {
       console.error(`❌ Erro ao navegar para página do documento:`, error);
       return false;
+    }
+  }
+
+  /**
+   * Baixa um arquivo usando axios com cookies de sessão
+   * @param pdfUrl - URL direta do PDF
+   * @param cookies - Cookies da sessão do Puppeteer
+   * @param fileName - Nome do arquivo para salvar
+   * @returns Caminho completo do arquivo salvo
+   */
+  private async downloadFileWithCookies(
+    pdfUrl: string,
+    cookies: any[],
+    fileName: string
+  ): Promise<string> {
+    try {
+      console.log(`📥 Baixando arquivo com cookies: ${pdfUrl}`);
+
+      // Converter cookies do Puppeteer para formato de string do header Cookie
+      const cookieString = cookies
+        .map((cookie) => `${cookie.name}=${cookie.value}`)
+        .join("; ");
+
+      console.log(`🍪 Cookies capturados: ${cookies.length} cookie(s)`);
+
+      // Fazer requisição HTTP com cookies
+      const response = await axios({
+        method: "GET",
+        url: pdfUrl,
+        headers: {
+          Cookie: cookieString,
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "application/pdf,application/octet-stream,*/*",
+          Referer: pdfUrl,
+        },
+        responseType: "stream",
+        timeout: 60000, // 60 segundos
+      });
+
+      // Criar diretório se não existir
+      if (!fs.existsSync(this.downloadsDir)) {
+        fs.mkdirSync(this.downloadsDir, { recursive: true });
+      }
+
+      // Caminho completo do arquivo
+      const filePath = path.join(this.downloadsDir, fileName);
+
+      // Salvar arquivo no disco
+      const writer = fs.createWriteStream(filePath);
+      response.data.pipe(writer);
+
+      // Aguardar conclusão do download
+      await new Promise<void>((resolve, reject) => {
+        writer.on("finish", () => resolve());
+        writer.on("error", reject);
+      });
+
+      // Verificar se o arquivo foi salvo corretamente
+      if (!fs.existsSync(filePath)) {
+        throw new Error("Arquivo não foi salvo no disco");
+      }
+
+      const stats = fs.statSync(filePath);
+      if (stats.size === 0) {
+        throw new Error("Arquivo baixado está vazio (0 bytes)");
+      }
+
+      console.log(
+        `✅ Arquivo baixado com sucesso: ${fileName} (${stats.size} bytes)`
+      );
+
+      return filePath;
+    } catch (error: any) {
+      console.error(`❌ Erro ao baixar arquivo com cookies:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extrai a URL do PDF do iframe na página da pasta digital
+   * @param page - Página do Puppeteer já na página da pasta digital
+   * @returns URL do PDF ou null se não encontrado
+   */
+  private async extractPDFUrlFromIframe(page: Page): Promise<string | null> {
+    try {
+      console.log(`🔍 Extraindo URL do PDF do iframe...`);
+
+      // Aguardar o iframe aparecer
+      const iframe = await page.waitForSelector("iframe#documento", {
+        timeout: 15000,
+      });
+
+      if (!iframe) {
+        console.log(`⚠️  Iframe #documento não encontrado`);
+        return null;
+      }
+
+      // Obter o atributo src do iframe
+      const iframeSrc = await page.evaluate((iframeEl) => {
+        // @ts-ignore
+        return iframeEl.getAttribute("src");
+      }, iframe);
+
+      if (!iframeSrc) {
+        console.log(`⚠️  Atributo src do iframe não encontrado`);
+        return null;
+      }
+
+      console.log(`📋 URL do iframe: ${iframeSrc}`);
+
+      // Extrair URL do PDF do parâmetro file ou usar a URL do iframe diretamente
+      const baseUrl = new URL(page.url()).origin;
+      let pdfUrl: string | null = null;
+
+      try {
+        const urlObj = new URL(iframeSrc, page.url());
+        const fileParam = urlObj.searchParams.get("file");
+
+        if (fileParam) {
+          // Decodificar a URL (URI decode)
+          const decodedFileUrl = decodeURIComponent(fileParam);
+          console.log(`📄 URL decodificada do PDF: ${decodedFileUrl}`);
+
+          // Reconstruir a URL completa do PDF
+          pdfUrl = decodedFileUrl.startsWith("http")
+            ? decodedFileUrl
+            : `${baseUrl}${decodedFileUrl}`;
+        } else {
+          // Se não tem parâmetro file, tentar usar a URL do iframe diretamente
+          pdfUrl = iframeSrc.startsWith("http")
+            ? iframeSrc
+            : `${baseUrl}${iframeSrc}`;
+        }
+      } catch (urlError: any) {
+        console.log(`⚠️  Erro ao processar URL do iframe: ${urlError.message}`);
+        // Tentar usar a URL do iframe diretamente
+        pdfUrl = iframeSrc.startsWith("http")
+          ? iframeSrc
+          : `${baseUrl}${iframeSrc}`;
+      }
+
+      console.log(`✅ URL do PDF extraída: ${pdfUrl}`);
+      return pdfUrl;
+    } catch (error: any) {
+      console.error(`❌ Erro ao extrair URL do PDF do iframe:`, error);
+      return null;
     }
   }
 
@@ -825,15 +925,8 @@ export class eSAJDocumentDownloader extends eSAJBase {
     try {
       const cleanProtocol = protocolNumber.trim().replace(/[\s.\-]/g, "");
 
-      // Configurar página para downloads
-      await this.setupPageForDownloads(page);
-
-      // Obter lista de arquivos antes do download
-      const filesBefore = fs.existsSync(this.downloadsDir)
-        ? fs.readdirSync(this.downloadsDir)
-        : [];
-
-      // ETAPA 1: Navegar para a página da pasta digital e clicar no botão de download
+      // ETAPA 1: Navegar para a página da pasta digital
+      console.log(`📄 Navegando para a página da pasta digital...`);
       const navigationSuccess = await this.navigateToDocumentPage(
         page,
         documentCandidate
@@ -844,73 +937,54 @@ export class eSAJDocumentDownloader extends eSAJBase {
           success: false,
           protocolNumber: cleanProtocol,
           documentType: documentType,
-          error:
-            "Não foi possível navegar para a página da pasta digital ou clicar no botão de download.",
+          error: "Não foi possível navegar para a página da pasta digital.",
         };
       }
 
-      // Aguardar o download completar e encontrar o arquivo baixado
-      console.log(`⏳ Aguardando download completar...`);
+      // Aguardar o iframe carregar completamente
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      let downloadedFile: string | null = null;
-      const maxWaitTime = 60000; // 60 segundos
-      const checkInterval = 1000; // Verificar a cada 1 segundo
-      const startTime = Date.now();
+      // ETAPA 2: Extrair URL do PDF do iframe
+      const pdfUrl = await this.extractPDFUrlFromIframe(page);
 
-      while (Date.now() - startTime < maxWaitTime) {
-        await new Promise((resolve) => setTimeout(resolve, checkInterval));
-
-        if (fs.existsSync(this.downloadsDir)) {
-          const filesAfter = fs.readdirSync(this.downloadsDir);
-
-          // Encontrar arquivo novo (não estava na lista antes)
-          const newFiles = filesAfter.filter(
-            (file) => !filesBefore.includes(file)
-          );
-
-          // Filtrar arquivos temporários (.crdownload, .tmp, etc.)
-          const completedFiles = newFiles.filter(
-            (file) =>
-              !file.endsWith(".crdownload") &&
-              !file.endsWith(".tmp") &&
-              !file.endsWith(".part")
-          );
-
-          if (completedFiles.length > 0) {
-            // Pegar o primeiro arquivo completo
-            downloadedFile = completedFiles[0];
-            console.log(`✅ Arquivo baixado encontrado: ${downloadedFile}`);
-            break;
-          }
-
-          // Verificar se ainda há arquivos sendo baixados
-          const downloadingFiles = newFiles.filter(
-            (file) =>
-              file.endsWith(".crdownload") ||
-              file.endsWith(".tmp") ||
-              file.endsWith(".part")
-          );
-
-          if (downloadingFiles.length === 0 && newFiles.length > 0) {
-            // Se não há mais arquivos sendo baixados, mas há arquivos novos, considerar completo
-            downloadedFile = newFiles[0];
-            console.log(`✅ Arquivo baixado encontrado: ${downloadedFile}`);
-            break;
-          }
-        }
-      }
-
-      if (!downloadedFile) {
+      if (!pdfUrl) {
         return {
           success: false,
           protocolNumber: cleanProtocol,
           documentType: documentType,
-          error: "Timeout aguardando download completar (60 segundos)",
+          error: "Não foi possível extrair a URL do PDF do iframe.",
         };
       }
 
-      const filePath = path.join(this.downloadsDir, downloadedFile);
-      const fileName = downloadedFile;
+      // ETAPA 3: Capturar cookies da sessão
+      console.log(`🍪 Capturando cookies da sessão...`);
+      const cookies = await page.cookies();
+
+      if (!cookies || cookies.length === 0) {
+        return {
+          success: false,
+          protocolNumber: cleanProtocol,
+          documentType: documentType,
+          error: "Não foi possível capturar cookies da sessão.",
+        };
+      }
+
+      console.log(`✅ ${cookies.length} cookie(s) capturado(s)`);
+
+      // ETAPA 4: Gerar nome do arquivo
+      const sanitizedDocumentType = (documentType || "documento")
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .substring(0, 50);
+      const timestamp = Date.now();
+      const fileName = `${sanitizedDocumentType}_${cleanProtocol}_${timestamp}.pdf`;
+
+      // ETAPA 5: Baixar arquivo usando axios com cookies
+      console.log(`📥 Iniciando download direto com cookies...`);
+      const filePath = await this.downloadFileWithCookies(
+        pdfUrl,
+        cookies,
+        fileName
+      );
 
       console.log(`✅ Download concluído: ${fileName}`);
 
@@ -920,6 +994,7 @@ export class eSAJDocumentDownloader extends eSAJBase {
         documentType: documentType,
         filePath: filePath,
         fileName: fileName,
+        pdfUrl: pdfUrl, // Manter para compatibilidade
       };
     } catch (error: any) {
       console.error(`❌ Erro ao baixar documento:`, error);

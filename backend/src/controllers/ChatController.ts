@@ -133,17 +133,36 @@ export class ChatController {
                   processResult.page // Passar a página já aberta para reutilização
                 );
 
-                if (downloadResult.success && downloadResult.pdfUrl) {
-                  // Retornar a URL do PDF para o usuário acessar diretamente
-                  downloadUrlResponse = downloadResult.pdfUrl;
-                  fileNameResponse = `${downloadResult.documentType || "documento"}.pdf`;
+                if (downloadResult.success) {
+                  // Verificar se o arquivo foi baixado com sucesso (filePath e fileName)
+                  if (downloadResult.filePath && downloadResult.fileName) {
+                    // Construir URL de download do servidor
+                    const baseUrl = `${req.protocol}://${req.get("host")}`;
+                    const downloadUrl = `${baseUrl}/download/file/${encodeURIComponent(downloadResult.fileName)}`;
+                    
+                    downloadUrlResponse = downloadUrl;
+                    fileNameResponse = downloadResult.fileName;
 
-                  response =
-                    `✅ Documento encontrado!\n\n` +
-                    `📄 Veja o documento clicando no link abaixo:\n` +
-                    `${downloadResult.pdfUrl}\n\n` +
-                    `⚠️ **Atenção:** Esta URL pode expirar após alguns minutos devido à sessão do e-SAJ. ` +
-                    `Acesse o link o mais rápido possível.`;
+                    response =
+                      `✅ Documento baixado com sucesso!\n\n` +
+                      `📄 Clique no link abaixo para baixar o documento:\n` +
+                      `${downloadUrl}\n\n` +
+                      `📋 Nome do arquivo: ${downloadResult.fileName}`;
+                  } else if (downloadResult.pdfUrl) {
+                    // Fallback: Se não foi baixado mas tem URL do PDF (comportamento antigo)
+                    downloadUrlResponse = downloadResult.pdfUrl;
+                    fileNameResponse = `${downloadResult.documentType || "documento"}.pdf`;
+
+                    response =
+                      `✅ Documento encontrado!\n\n` +
+                      `📄 Veja o documento clicando no link abaixo:\n` +
+                      `${downloadResult.pdfUrl}\n\n` +
+                      `⚠️ **Atenção:** Esta URL pode expirar após alguns minutos devido à sessão do e-SAJ. ` +
+                      `Acesse o link o mais rápido possível.`;
+                  } else {
+                    response =
+                      `❌ Erro ao baixar documento: ${downloadResult.error || "Erro desconhecido"}`;
+                  }
                 } else {
                   response =
                     `❌ Erro ao localizar documento: ${downloadResult.error || "Erro desconhecido"}`;
