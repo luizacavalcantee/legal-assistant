@@ -96,6 +96,7 @@ export class ChatController {
 
       // 2. Rotear baseado na intenção
       switch (intentResult.intention) {
+        case UserIntent.QUERY_DOCUMENT:
         case UserIntent.DOWNLOAD_DOCUMENT:
         case UserIntent.SUMMARIZE_PROCESS:
           // Verificar se há número de protocolo
@@ -121,14 +122,15 @@ export class ChatController {
             } else {
               // Processo encontrado - realizar ação solicitada
               if (intentResult.intention === UserIntent.DOWNLOAD_DOCUMENT) {
-                // Baixar documento (passando a URL da página de detalhes para evitar buscar novamente)
+                // Baixar documento (reutilizando a página já aberta se disponível)
                 console.log(
                   `📥 Iniciando download de documento${intentResult.documentType ? ` (${intentResult.documentType})` : ""}...`
                 );
                 const downloadResult = await this.eSAJService.downloadDocument(
                   protocolNumber,
                   intentResult.documentType || "documento",
-                  processResult.processPageUrl // Passar a URL da página de detalhes
+                  processResult.processPageUrl, // Passar a URL da página de detalhes
+                  processResult.page // Passar a página já aberta para reutilização
                 );
 
                 if (downloadResult.success && downloadResult.pdfUrl) {
@@ -146,11 +148,73 @@ export class ChatController {
                   response =
                     `❌ Erro ao localizar documento: ${downloadResult.error || "Erro desconhecido"}`;
                 }
+              } else if (intentResult.intention === UserIntent.QUERY_DOCUMENT) {
+                // QUERY_DOCUMENT - Pergunta sobre conteúdo de documento
+                console.log(
+                  `📄 Iniciando extração de texto do documento${intentResult.documentType ? ` (${intentResult.documentType})` : ""} do processo ${protocolNumber}...`
+                );
+                const textResult = await this.eSAJService.extractDocumentText(
+                  protocolNumber,
+                  intentResult.documentType || "documento",
+                  processResult.processPageUrl // Passar a URL da página de detalhes
+                );
+
+                if (!textResult.success || !textResult.text) {
+                  response =
+                    `❌ Erro ao extrair texto do documento: ${textResult.error || "Erro desconhecido"}`;
+                } else {
+                  console.log(
+                    `✅ Texto extraído (${textResult.text.length} caracteres). Respondendo pergunta com LLM...`
+                  );
+                  try {
+                    // Usar a mensagem original do usuário como pergunta
+                    const answer = await this.llmService.answerDocumentQuestion(
+                      message.trim(), // Pergunta original do usuário
+                      textResult.text,
+                      textResult.documentType,
+                      protocolNumber
+                    );
+                    response = `📄 **Resposta sobre o documento${textResult.documentType ? ` (${textResult.documentType})` : ""} do processo ${protocolNumber}**\n\n${answer}`;
+                  } catch (answerError: any) {
+                    console.error(
+                      `❌ Erro ao responder pergunta:`,
+                      answerError
+                    );
+                    response =
+                      `❌ Erro ao responder pergunta sobre o documento: ${answerError.message || "Erro desconhecido"}`;
+                  }
+                }
               } else {
                 // SUMMARIZE_PROCESS
-                response =
-                  `Processo ${protocolNumber} encontrado no e-SAJ. ` +
-                  "A funcionalidade de resumo do processo será implementada na próxima etapa.";
+                console.log(
+                  `📋 Iniciando extração de movimentações do processo ${protocolNumber}...`
+                );
+                const movementsResult = await this.eSAJService.extractMovements(
+                  protocolNumber,
+                  processResult.processPageUrl // Passar a URL da página de detalhes
+                );
+
+                if (!movementsResult.success || !movementsResult.movements) {
+                  response =
+                    `❌ Erro ao extrair movimentações do processo: ${movementsResult.error || "Erro desconhecido"}`;
+                } else {
+                  console.log(
+                    `✅ Movimentações extraídas (${movementsResult.movements.length} caracteres). Gerando resumo com LLM...`
+                  );
+                  try {
+                    const summary = await this.llmService.summarizeProcess(
+                      movementsResult.movements
+                    );
+                    response = `📋 **Resumo do Processo ${protocolNumber}**\n\n${summary}`;
+                  } catch (summaryError: any) {
+                    console.error(
+                      `❌ Erro ao gerar resumo:`,
+                      summaryError
+                    );
+                    response =
+                      `❌ Erro ao gerar resumo do processo: ${summaryError.message || "Erro desconhecido"}`;
+                  }
+                }
               }
             }
           }

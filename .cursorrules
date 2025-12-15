@@ -1,0 +1,38 @@
+# Cursor Rules - Assistente Jurídico
+
+## Regras de Código TypeScript
+
+### 1. Estrutura de Try-Catch
+- **NUNCA** deixe código fora de blocos try-catch quando estiver dentro de um método
+- **SEMPRE** verifique que todo bloco `catch` está dentro do método correto
+- **SEMPRE** feche chaves corretamente: cada `try {` precisa de um `} catch` correspondente
+- **NUNCA** duplique tratamento de erros - se já existe um `catch`, não adicione outro bloco de tratamento fora do `catch`
+
+### 2. Métodos e Funções
+- **SEMPRE** verifique que métodos estão completamente fechados antes de adicionar novos
+- **SEMPRE** leia o arquivo completo antes de fazer edições grandes
+- **NUNCA** adicione código entre métodos sem verificar a estrutura completa
+
+### 3. Verificação de Sintaxe
+- **SEMPRE** execute `read_lints` após edições em arquivos TypeScript
+- **SEMPRE** verifique se todas as chaves `{` têm correspondentes `}`
+- **SEMPRE** verifique se blocos `try-catch` estão completos e corretos
+
+### 4. Edições em Arquivos Existentes
+- **SEMPRE** leia o contexto completo ao redor da área que será editada (pelo menos 50 linhas antes e depois)
+- **NUNCA** faça substituições sem verificar o contexto completo
+- **SEMPRE** use `read_file` para verificar a estrutura antes de grandes edições
+
+### 5. Tratamento de Erros
+- **SEMPRE** mantenha tratamento de erros dentro do bloco `catch` correspondente
+- **NUNCA** duplique tratamento de erros em múltiplos lugares
+- **SEMPRE** use a mesma estrutura de tratamento de erros em métodos similares
+
+## Checklist Antes de Finalizar Edições
+
+- [ ] Todos os blocos try-catch estão fechados corretamente
+- [ ] Não há código solto fora de métodos ou blocos
+- [ ] Todas as chaves `{` têm correspondentes `}`
+- [ ] `read_lints` não mostra erros de sintaxe
+- [ ] O arquivo compila sem erros TypeScript
+
