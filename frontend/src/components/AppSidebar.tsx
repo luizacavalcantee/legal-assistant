@@ -25,7 +25,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuAction,
   SidebarSeparator,
   useSidebar,
 } from "./ui/sidebar";
