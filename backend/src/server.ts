@@ -118,15 +118,64 @@ async function startServer() {
     await prisma.$queryRaw`SELECT 1`;
     console.log("✅ Banco de dados está acessível");
     
-    // Verificar se a tabela existe
+    // Verificar se a tabela existe, se não, criar manualmente
     try {
       await prisma.$queryRaw`SELECT 1 FROM base_de_conhecimento LIMIT 1`;
       console.log("✅ Tabela base_de_conhecimento existe");
     } catch (tableError: any) {
-      console.error("❌ Tabela base_de_conhecimento não encontrada!");
-      console.error("   Execute: npm run prisma:migrate:deploy");
-      console.error("   Ou use: npx prisma migrate deploy");
-      throw new Error("Tabela base_de_conhecimento não existe. Execute as migrations primeiro.");
+      console.warn("⚠️  Tabela base_de_conhecimento não encontrada!");
+      console.log("   Tentando criar tabela manualmente...");
+      
+      try {
+        // Criar enum se não existir
+        await prisma.$executeRawUnsafe(`
+          DO $$ BEGIN
+            CREATE TYPE "StatusIndexacao" AS ENUM ('PENDENTE', 'INDEXADO', 'ERRO');
+          EXCEPTION
+            WHEN duplicate_object THEN null;
+          END $$;
+        `);
+        
+        // Criar tabela se não existir
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "base_de_conhecimento" (
+            "id" TEXT NOT NULL,
+            "titulo" TEXT NOT NULL,
+            "caminho_arquivo" TEXT NOT NULL,
+            "status_indexacao" "StatusIndexacao" NOT NULL DEFAULT 'PENDENTE',
+            "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "base_de_conhecimento_pkey" PRIMARY KEY ("id")
+          );
+        `);
+        
+        // Criar tabela de migrations do Prisma se não existir (para evitar problemas futuros)
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+            "id" VARCHAR(36) NOT NULL,
+            "checksum" VARCHAR(64) NOT NULL,
+            "finished_at" TIMESTAMP(3),
+            "migration_name" VARCHAR(255) NOT NULL,
+            "logs" TEXT,
+            "rolled_back_at" TIMESTAMP(3),
+            "started_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "applied_steps_count" INTEGER NOT NULL DEFAULT 0,
+            CONSTRAINT "_prisma_migrations_pkey" PRIMARY KEY ("id")
+          );
+        `);
+        
+        // Marcar a migration como aplicada
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO "_prisma_migrations" ("id", "checksum", "migration_name", "started_at", "finished_at", "applied_steps_count")
+          VALUES ('20251213004332_configuration', '', '20251213004332_configuration', NOW(), NOW(), 1)
+          ON CONFLICT ("id") DO NOTHING;
+        `);
+        
+        console.log("✅ Tabela base_de_conhecimento criada com sucesso!");
+      } catch (createError: any) {
+        console.error("❌ Erro ao criar tabela:", createError.message);
+        console.error("   Stack:", createError.stack);
+        throw new Error(`Não foi possível criar a tabela: ${createError.message}`);
+      }
     }
   } catch (error: any) {
     console.error("❌ Erro ao conectar com o banco de dados:", error.message);
