@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { ChatMessage } from "../types/chat.types";
-import { chatService } from "../services/api";
+import { chatService, default as api } from "../services/api";
 import { MessageList } from "../components/MessageList";
 import { MessageInput } from "../components/MessageInput";
 import { AlertCircle } from "lucide-react";
@@ -118,28 +118,93 @@ export function ChatPage() {
     // Procurar por padrão: http://.../download/file/... ou https://.../download/file/...
     const downloadPattern = /https?:\/\/[^\s\n]+\/download\/file\/([^\s\n\)]+)/;
     const match = text.match(downloadPattern);
-    return match ? match[0] : null;
+    if (match) {
+      return match[0];
+    }
+    
+    // Se não encontrar URL completa, procurar por URL relativa
+    const relativePattern = /\/download\/file\/([^\s\n\)]+)/;
+    const relativeMatch = text.match(relativePattern);
+    if (relativeMatch) {
+      // Construir URL completa usando a baseURL da API
+      const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+      return `${apiUrl}${relativeMatch[0]}`;
+    }
+    
+    return null;
   };
 
   // Função para fazer download automático do arquivo
   const downloadFile = async (url: string, fileName: string) => {
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Erro ao baixar arquivo: ${response.statusText}`);
+      console.log("📥 Iniciando download:", url);
+      console.log("📋 Nome do arquivo:", fileName);
+      
+      // Se a URL é relativa, construir URL completa
+      let fullUrl = url;
+      if (url.startsWith("/")) {
+        const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+        fullUrl = `${apiUrl}${url}`;
       }
+      
+      console.log("🔗 URL completa:", fullUrl);
+      
+      // Usar axios para fazer o download (já tem baseURL configurada)
+      const response = await api.get(fullUrl, {
+        responseType: "blob",
+      });
 
-      const blob = await response.blob();
+      const blob = response.data;
+      console.log("📦 Blob criado, tamanho:", blob.size, "bytes");
+      
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.download = fileName;
+      link.style.display = "none";
       document.body.appendChild(link);
+      
+      console.log("🖱️  Clicando no link de download...");
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error("Erro ao fazer download:", error);
+      
+      // Aguardar um pouco antes de remover para garantir que o download inicie
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+        console.log("✅ Download concluído:", fileName);
+      }, 200);
+    } catch (error: any) {
+      console.error("❌ Erro ao fazer download com axios:", error);
+      // Tentar fallback com fetch direto
+      try {
+        let fullUrl = url;
+        if (url.startsWith("/")) {
+          const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+          fullUrl = `${apiUrl}${url}`;
+        }
+        
+        console.log("🔄 Tentando fallback com fetch:", fullUrl);
+        const response = await fetch(fullUrl);
+        if (!response.ok) {
+          throw new Error(`Erro ao baixar arquivo: ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = fileName;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+        }, 200);
+        console.log("✅ Download concluído via fallback:", fileName);
+      } catch (fallbackError: any) {
+        console.error("❌ Erro no fallback de download:", fallbackError);
+        alert(`Erro ao baixar arquivo: ${fallbackError.message}`);
+      }
     }
   };
 
