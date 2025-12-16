@@ -18,7 +18,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
   if (messages.length === 0 && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
-        <Bot className="h-16 w-16 text-muted-foreground mb-4" />
+        <Bot className="h-16 w-16 text-muted-foreground mb-4" strokeWidth={1.5} />
         <h3 className="text-lg font-semibold text-muted-foreground mb-2">
           Olá! Sou seu Assistente Jurídico
         </h3>

@@ -63,6 +63,7 @@
     "dev:clean-port": "node -e \"const { execSync } = require('child_process'); try { if (process.platform === 'win32') { const result = execSync('netstat -ano | findstr :3000', { encoding: 'utf8' }); const lines = result.split('\\n').filter(l => l.trim()); lines.forEach(line => { const match = line.match(/\\s+(\\d+)\\s*$/); if (match) { try { execSync(`taskkill /PID ${match[1]} /F`, { stdio: 'ignore' }); } catch (e) {} } }); } else { execSync('lsof -ti:3000 | xargs kill -9 2>/dev/null', { stdio: 'ignore' }); } } catch (e) {}\"",
     "build": "npm run prisma:generate && tsc",
     "postinstall": "npx puppeteer browsers install chrome || echo 'Chrome installation skipped (may already be installed)'",
+    "install:chrome": "mkdir -p .cache/puppeteer && PUPPETEER_CACHE_DIR=.cache/puppeteer npx puppeteer browsers install chrome || echo 'Chrome installation skipped'",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

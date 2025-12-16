@@ -49,8 +49,10 @@ export class eSAJBase {
         
         if (!executablePath) {
           // Verificar se o Chrome está no cache padrão do Puppeteer
+          // Priorizar diretório do projeto (persiste entre builds) e depois cache do sistema
           const cacheDirs: string[] = [
             process.env.PUPPETEER_CACHE_DIR,
+            path.join(process.cwd(), ".cache", "puppeteer"), // Diretório dentro do projeto (persiste)
             process.env.HOME ? `${process.env.HOME}/.cache/puppeteer` : undefined,
             "/opt/render/.cache/puppeteer",
             "/root/.cache/puppeteer",
@@ -112,9 +114,20 @@ export class eSAJBase {
             // Procurar o Chrome nos diretórios de cache
             for (const cacheDir of cacheDirs) {
               console.log(`🔍 Verificando diretório: ${cacheDir}`);
+              
+              // Tentar criar o diretório se não existir (apenas para diretórios dentro do projeto)
               if (!fs.existsSync(cacheDir)) {
-                console.log(`   ⚠️  Diretório não existe: ${cacheDir}`);
-                continue;
+                if (cacheDir.includes(process.cwd())) {
+                  try {
+                    fs.mkdirSync(cacheDir, { recursive: true });
+                    console.log(`   📁 Diretório criado: ${cacheDir}`);
+                  } catch (mkdirError: any) {
+                    console.log(`   ⚠️  Não foi possível criar diretório: ${cacheDir} - ${mkdirError.message}`);
+                  }
+                } else {
+                  console.log(`   ⚠️  Diretório não existe: ${cacheDir}`);
+                  continue;
+                }
               }
               
               try {
