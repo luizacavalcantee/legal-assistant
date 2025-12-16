@@ -19,11 +19,14 @@ const corsOptions = {
     origin: string | undefined,
     callback: (err: Error | null, allow?: boolean) => void
   ) => {
-    // Lista de origens permitidas
+    // Função para normalizar URLs (remover barra final e espaços)
+    const normalizeUrl = (url: string) => url.trim().replace(/\/+$/, "");
+    
+    // Lista de origens permitidas (normalizadas)
     const allowedOrigins = process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+      ? process.env.CORS_ORIGIN.split(",").map((o) => normalizeUrl(o))
       : process.env.FRONTEND_URL
-      ? [process.env.FRONTEND_URL]
+      ? [normalizeUrl(process.env.FRONTEND_URL)]
       : ["http://localhost:5173", "http://localhost:3000"];
 
     // Em desenvolvimento, permitir requisições sem origin (Postman, curl, etc.)
@@ -31,11 +34,15 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    // Normalizar a origem recebida antes de comparar
+    const normalizedOrigin = origin ? normalizeUrl(origin) : origin;
+
     // Verificar se a origem está na lista permitida
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!normalizedOrigin || allowedOrigins.includes(normalizedOrigin)) {
       callback(null, true);
     } else {
-      console.warn(`CORS bloqueado para origem: ${origin}`);
+      console.warn(`CORS bloqueado para origem: ${normalizedOrigin}`);
+      console.warn(`Origens permitidas: ${allowedOrigins.join(", ")}`);
       callback(new Error("Not allowed by CORS"));
     }
   },
