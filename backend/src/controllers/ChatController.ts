@@ -4,24 +4,25 @@ import * as path from "path";
 import { LLMService } from "../services/LLMService";
 import { RAGChainService } from "../services/RAGChainService";
 import { IntentDetectionService, UserIntent } from "../services/IntentDetectionService";
-import { eSAJService } from "../services/eSAJService";
+import { eSAJService as eSAJServiceClass } from "../services/eSAJService";
+import type { eSAJService } from "../services/eSAJService";
 import { ChatMessageRequest, ChatMessageResponse } from "../types/chat.types";
 
 export class ChatController {
   private llmService: LLMService;
   private ragChainService?: RAGChainService;
   private intentDetectionService: IntentDetectionService;
-  private eSAJService: eSAJService;
+  private eSAJService: eSAJServiceClass;
 
   constructor(
     llmService: LLMService,
     ragChainService?: RAGChainService,
-    eSAJService?: eSAJService
+    eSAJService?: eSAJServiceClass
   ) {
     this.llmService = llmService;
     this.ragChainService = ragChainService;
     this.intentDetectionService = new IntentDetectionService(llmService);
-    this.eSAJService = eSAJService ?? new eSAJService();
+    this.eSAJService = eSAJService ?? new eSAJServiceClass();
   }
 
       /**
