@@ -52,7 +52,12 @@ export class eSAJBase {
             "--disable-dev-shm-usage",
             "--disable-accelerated-2d-canvas",
             "--disable-gpu",
+            "--disable-web-security",
+            "--disable-features=IsolateOrigins,site-per-process",
           ],
+          // Puppeteer deve encontrar o Chrome instalado automaticamente via postinstall
+          // Se necessário, pode ser configurado via PUPPETEER_EXECUTABLE_PATH
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         });
 
         // Handler para desconexão inesperada

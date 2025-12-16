@@ -3,7 +3,7 @@ services:
     name: assistente-juridico-backend
     env: node
     plan: free
-    buildCommand: npm install && npm run prisma:generate && npm run build
+    buildCommand: npm install && npx puppeteer browsers install chrome && npm run prisma:generate && npm run build
     startCommand: npx prisma migrate deploy && npm start
     envVars:
       - key: NODE_ENV
