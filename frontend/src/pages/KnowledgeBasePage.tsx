@@ -135,7 +135,8 @@ export function KnowledgeBasePage() {
 
   // Visualizar/Abrir documento
   const handleView = (id: string) => {
-    const fileUrl = `http://localhost:3000/documents/${id}/file`;
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    const fileUrl = `${apiUrl}/documents/${id}/file`;
     // Abrir em nova aba
     window.open(fileUrl, "_blank");
   };
