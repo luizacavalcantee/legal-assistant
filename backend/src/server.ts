@@ -117,6 +117,17 @@ async function startServer() {
     // Testar query simples
     await prisma.$queryRaw`SELECT 1`;
     console.log("✅ Banco de dados está acessível");
+    
+    // Verificar se a tabela existe
+    try {
+      await prisma.$queryRaw`SELECT 1 FROM base_de_conhecimento LIMIT 1`;
+      console.log("✅ Tabela base_de_conhecimento existe");
+    } catch (tableError: any) {
+      console.error("❌ Tabela base_de_conhecimento não encontrada!");
+      console.error("   Execute: npm run prisma:migrate:deploy");
+      console.error("   Ou use: npx prisma migrate deploy");
+      throw new Error("Tabela base_de_conhecimento não existe. Execute as migrations primeiro.");
+    }
   } catch (error: any) {
     console.error("❌ Erro ao conectar com o banco de dados:", error.message);
     console.error("   Verifique se DATABASE_URL está configurada corretamente");

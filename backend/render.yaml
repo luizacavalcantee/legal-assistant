@@ -3,8 +3,8 @@ services:
     name: assistente-juridico-backend
     env: node
     plan: free
-    buildCommand: npm install && npm run prisma:generate && npm run build && npm run prisma:migrate:deploy
-    startCommand: npm start
+    buildCommand: npm install && npm run prisma:generate && npm run build
+    startCommand: npx prisma migrate deploy && npm start
     envVars:
       - key: NODE_ENV
         value: production

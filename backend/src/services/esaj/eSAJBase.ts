@@ -43,22 +43,33 @@ export class eSAJBase {
    */
   protected async initBrowser(): Promise<Browser> {
     if (!this.browser) {
-      this.browser = await puppeteer.launch({
-        headless: this.headless,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--disable-gpu",
-        ],
-      });
+      try {
+        this.browser = await puppeteer.launch({
+          headless: this.headless,
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-accelerated-2d-canvas",
+            "--disable-gpu",
+          ],
+        });
 
-      // Handler para desconexão inesperada
-      this.browser.on("disconnected", () => {
-        console.log("⚠️  Navegador desconectado. Reinicializando...");
-        this.browser = null;
-      });
+        // Handler para desconexão inesperada
+        this.browser.on("disconnected", () => {
+          console.log("⚠️  Navegador desconectado. Reinicializando...");
+          this.browser = null;
+        });
+      } catch (error: any) {
+        console.error("❌ Erro ao inicializar Puppeteer:", error.message);
+        console.error("   Puppeteer requer Chrome instalado no sistema.");
+        console.error("   No Render, você precisa configurar Chrome separadamente.");
+        console.error("   Funcionalidades do e-SAJ não estarão disponíveis.");
+        throw new Error(
+          `Puppeteer não pode ser inicializado: ${error.message}. ` +
+          `Funcionalidades do e-SAJ requerem Chrome instalado no sistema.`
+        );
+      }
     }
     return this.browser;
   }

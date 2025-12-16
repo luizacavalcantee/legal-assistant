@@ -119,9 +119,27 @@ export class ChatController {
             console.log(
               `🔍 Buscando processo ${protocolNumber} no e-SAJ...`
             );
-            const processResult = await this.eSAJService.findProcess(
-              protocolNumber
-            );
+            
+            let processResult;
+            try {
+              processResult = await this.eSAJService.findProcess(
+                protocolNumber
+              );
+            } catch (esajError: any) {
+              console.error("❌ Erro ao acessar e-SAJ:", esajError.message);
+              if (esajError.message?.includes("Puppeteer")) {
+                response =
+                  "⚠️ Funcionalidade do e-SAJ temporariamente indisponível. " +
+                  "O serviço de web scraping requer configurações adicionais no servidor. " +
+                  "Por favor, tente novamente mais tarde ou entre em contato com o suporte.";
+              } else {
+                response =
+                  `❌ Erro ao buscar processo no e-SAJ: ${esajError.message}. ` +
+                  "Por favor, tente novamente mais tarde.";
+              }
+              // Continuar para retornar a resposta de erro
+              processResult = { found: false, error: esajError.message };
+            }
 
             if (!processResult.found) {
               response =
