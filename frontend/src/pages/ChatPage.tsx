@@ -20,39 +20,70 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const statusMessageIdRef = useRef<string | null>(null);
 
-  // Ref para rastrear o chatId anterior e evitar salvamento incorreto
-  const previousChatIdRef = useRef<string | undefined>(chatId);
+  // Ref para rastrear o chatId atual e evitar salvamento incorreto
+  const currentChatIdRef = useRef<string | undefined>(chatId);
   const isInitialMount = useRef(true);
+  const messagesToSaveRef = useRef<ChatMessage[]>([]);
+  const isChangingChatRef = useRef(false);
 
   // Carregar mensagens do chat atual quando chatId mudar
   useEffect(() => {
-    // Limpar mensagens imediatamente quando o chatId mudar (exceto no mount inicial)
-    if (!isInitialMount.current && previousChatIdRef.current !== chatId) {
+    // Se o chatId mudou, marcar que estamos mudando de chat
+    if (currentChatIdRef.current !== chatId) {
+      isChangingChatRef.current = true;
+      // Limpar mensagens imediatamente para evitar salvamento incorreto
       setMessages([]);
+      messagesToSaveRef.current = [];
+      currentChatIdRef.current = chatId;
     }
-    
-    previousChatIdRef.current = chatId;
-    isInitialMount.current = false;
 
     if (chatId) {
       const session = getChatSession(chatId);
       if (session) {
         setMessages(session.messages);
+        messagesToSaveRef.current = session.messages;
       } else {
         // Se a sessão não existe, garantir que mensagens estão vazias
         setMessages([]);
+        messagesToSaveRef.current = [];
       }
     } else {
       // Se não há chatId, limpar mensagens (o MainLayout vai redirecionar)
       setMessages([]);
+      messagesToSaveRef.current = [];
     }
+    
+    // Marcar que terminamos de mudar de chat após um pequeno delay
+    // Isso garante que qualquer salvamento pendente seja cancelado
+    setTimeout(() => {
+      isChangingChatRef.current = false;
+    }, 100);
+    
+    isInitialMount.current = false;
   }, [chatId]);
 
-  // Salvar mensagens sempre que mudarem, mas só se houver mensagens
+  // Salvar mensagens sempre que mudarem, mas só se houver mensagens e o chatId corresponder
   useEffect(() => {
-    // Não salvar se o chatId mudou (evitar salvar mensagens do chat anterior)
-    // Verificar se o chatId atual corresponde ao que está sendo salvo
-    if (chatId && previousChatIdRef.current === chatId && messages.length > 0) {
+    // Não salvar se estamos mudando de chat
+    if (isChangingChatRef.current) {
+      return;
+    }
+    
+    // Só salvar se:
+    // 1. Há um chatId válido
+    // 2. O chatId atual corresponde ao que está sendo salvo
+    // 3. Há mensagens para salvar
+    // 4. As mensagens são diferentes das que já foram salvas (evitar loops)
+    // 5. Não estamos no mount inicial sem mensagens
+    if (
+      chatId && 
+      currentChatIdRef.current === chatId && 
+      messages.length > 0 &&
+      JSON.stringify(messages) !== JSON.stringify(messagesToSaveRef.current)
+    ) {
+      // Atualizar referência das mensagens salvas
+      messagesToSaveRef.current = messages;
+      
       const session = getChatSession(chatId);
       if (session) {
         // Sessão já existe, apenas atualizar
@@ -67,6 +98,7 @@ export function ChatPage() {
           newSession.id = chatId;
           newSession.messages = messages;
           addChatSession(newSession);
+          messagesToSaveRef.current = messages;
         }
       }
     }

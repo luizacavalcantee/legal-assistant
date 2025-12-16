@@ -185,26 +185,60 @@ export class eSAJBase {
         // Se ainda não encontrou, tentar usar a API do Puppeteer
         if (!executablePath) {
           try {
+            // Configurar cache directory antes de chamar executablePath
+            const cacheDir = process.env.PUPPETEER_CACHE_DIR || "/opt/render/.cache/puppeteer";
+            if (!process.env.PUPPETEER_CACHE_DIR) {
+              process.env.PUPPETEER_CACHE_DIR = cacheDir;
+            }
+            
+            // Garantir que o diretório existe
+            if (!fs.existsSync(cacheDir)) {
+              fs.mkdirSync(cacheDir, { recursive: true });
+              console.log(`📁 Diretório de cache criado: ${cacheDir}`);
+            }
+            
             const puppeteerPath = puppeteer.executablePath();
             if (puppeteerPath && fs.existsSync(puppeteerPath)) {
               executablePath = puppeteerPath;
               console.log(`✅ Chrome encontrado via Puppeteer API: ${executablePath}`);
+            } else {
+              console.log(`⚠️  Puppeteer.executablePath() retornou: ${puppeteerPath}, mas arquivo não existe`);
+              console.log(`   Tentando instalar Chrome programaticamente...`);
+              
+              // Tentar instalar Chrome programaticamente
+              try {
+                const { execSync } = require("child_process");
+                console.log(`   Executando: PUPPETEER_CACHE_DIR=${cacheDir} npx puppeteer browsers install chrome`);
+                execSync(`PUPPETEER_CACHE_DIR=${cacheDir} npx puppeteer browsers install chrome`, {
+                  stdio: "inherit",
+                  env: { ...process.env, PUPPETEER_CACHE_DIR: cacheDir },
+                });
+                
+                // Tentar novamente após instalação
+                const newPuppeteerPath = puppeteer.executablePath();
+                if (newPuppeteerPath && fs.existsSync(newPuppeteerPath)) {
+                  executablePath = newPuppeteerPath;
+                  console.log(`✅ Chrome instalado e encontrado: ${executablePath}`);
+                }
+              } catch (installError: any) {
+                console.log(`   ⚠️  Erro ao instalar Chrome: ${installError.message}`);
+              }
             }
           } catch (e: any) {
             console.log(`⚠️  Puppeteer.executablePath() falhou: ${e.message}`);
           }
         }
         
+        // Configurar cache directory para Puppeteer se ainda não estiver configurado
+        if (!process.env.PUPPETEER_CACHE_DIR) {
+          process.env.PUPPETEER_CACHE_DIR = "/opt/render/.cache/puppeteer";
+        }
+        
         if (executablePath) {
           console.log(`🔧 Usando Chrome em: ${executablePath}`);
         } else {
           console.log("🔧 Tentando usar Chrome padrão do Puppeteer (sem executablePath)...");
-        }
-        
-        // Configurar cache directory para Puppeteer
-        const cacheDir = process.env.PUPPETEER_CACHE_DIR || "/opt/render/.cache/puppeteer";
-        if (!process.env.PUPPETEER_CACHE_DIR) {
-          process.env.PUPPETEER_CACHE_DIR = cacheDir;
+          console.log(`   PUPPETEER_CACHE_DIR: ${process.env.PUPPETEER_CACHE_DIR}`);
         }
         
         this.browser = await puppeteer.launch({
