@@ -82,9 +82,11 @@ export class DocumentController {
         });
       }
 
+      // TypeScript não consegue inferir que caminhoArquivo não é undefined aqui
+      // mas sabemos que é porque há um return acima se for undefined
       const data: CreateDocumentDto = {
         titulo,
-        caminho_arquivo: caminhoArquivo,
+        caminho_arquivo: caminhoArquivo!,
       };
 
       const document = await this.service.createDocument(data, file?.path);

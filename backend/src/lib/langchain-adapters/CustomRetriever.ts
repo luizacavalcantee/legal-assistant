@@ -8,6 +8,7 @@ import { QdrantVectorStore } from "./QdrantVectorStore";
 export class CustomRetriever extends BaseRetriever {
   private vectorStore: QdrantVectorStore;
   private k: number;
+  lc_namespace = ["custom", "retriever"];
 
   constructor(vectorStore: QdrantVectorStore, k: number = 5) {
     super({});

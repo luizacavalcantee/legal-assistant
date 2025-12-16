@@ -21,7 +21,7 @@ export class ChatController {
     this.llmService = llmService;
     this.ragChainService = ragChainService;
     this.intentDetectionService = new IntentDetectionService(llmService);
-    this.eSAJService = eSAJService || new eSAJService();
+    this.eSAJService = eSAJService ?? new eSAJService();
   }
 
       /**
