@@ -109,8 +109,21 @@ export const documentService = {
 export const chatService = {
   // Enviar mensagem ao chat
   async sendMessage(data: ChatMessageRequest): Promise<ChatMessageResponse> {
-    const response = await api.post<ChatMessageResponse>("/chat/message", data);
-    return response.data;
+    try {
+      console.log("📤 Enviando requisição para /chat/message:", data);
+      const response = await api.post<ChatMessageResponse>(
+        "/chat/message",
+        data
+      );
+      console.log("✅ Resposta recebida:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("❌ Erro na requisição de chat:", error);
+      console.error("   Status:", error.response?.status);
+      console.error("   Data:", error.response?.data);
+      console.error("   Message:", error.message);
+      throw error;
+    }
   },
 };
 

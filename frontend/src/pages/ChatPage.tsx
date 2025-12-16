@@ -309,7 +309,14 @@ export function ChatPage() {
 
     try {
       // Chamar API do backend
+      console.log("📤 Enviando mensagem para o backend...");
       const response = await chatService.sendMessage({ message });
+      console.log("✅ Resposta recebida do backend:", {
+        intention: response.intention,
+        hasResponse: !!response.response,
+        hasDownloadUrl: !!response.downloadUrl,
+        hasSources: !!response.sources,
+      });
 
       // Limpar intervalo de progresso
       clearInterval(progressInterval);
@@ -429,7 +436,14 @@ export function ChatPage() {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err: any) {
-      console.error("Erro ao enviar mensagem:", err);
+      console.error("❌ Erro ao enviar mensagem:", err);
+      console.error("   Detalhes do erro:", {
+        message: err.message,
+        code: err.code,
+        response: err.response?.data,
+        status: err.response?.status,
+        config: err.config,
+      });
 
       // Limpar intervalo de progresso se existir
       if (progressInterval) {
@@ -441,23 +455,49 @@ export function ChatPage() {
         removeStatusMessage(statusMessageIdRef.current);
       }
 
+      // Determinar mensagem de erro mais descritiva
+      let errorContent = "Desculpe, ocorreu um erro ao processar sua mensagem.";
+      let errorDetails = "";
+
+      if (err.code === "ERR_NETWORK" || err.message?.includes("Network Error")) {
+        errorContent = "❌ Erro de conexão";
+        errorDetails = "Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.";
+      } else if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+        errorContent = "⏳ Tempo de espera esgotado";
+        errorDetails = "A operação está demorando mais que o esperado. Isso pode acontecer com buscas no e-SAJ. Por favor, tente novamente.";
+      } else if (err.response?.status === 500) {
+        errorContent = "⚠️ Erro no servidor";
+        errorDetails = err.response?.data?.error || err.response?.data?.message || "O servidor encontrou um erro ao processar sua solicitação. Tente novamente em alguns instantes.";
+      } else if (err.response?.status === 404) {
+        errorContent = "🔍 Recurso não encontrado";
+        errorDetails = "O endpoint solicitado não foi encontrado. Isso pode indicar um problema de configuração.";
+      } else if (err.response?.status === 403) {
+        errorContent = "🔒 Acesso negado";
+        errorDetails = "Você não tem permissão para realizar esta operação.";
+      } else if (err.response?.data?.error) {
+        errorContent = "❌ Erro";
+        errorDetails = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorContent = "❌ Erro";
+        errorDetails = err.response.data.message;
+      } else if (err.message) {
+        errorContent = "❌ Erro";
+        errorDetails = err.message;
+      } else {
+        errorDetails = "Por favor, tente novamente. Se o problema persistir, entre em contato com o suporte.";
+      }
+
       // Adicionar mensagem de erro ao histórico
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: "assistant",
-        content:
-          err.response?.data?.error ||
-          err.response?.data?.message ||
-          "Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.",
+        content: `${errorContent}\n\n${errorDetails}`,
         timestamp: new Date().toISOString(),
         isError: true,
       };
 
       setMessages((prev) => [...prev, errorMessage]);
-      setError(
-        err.response?.data?.error ||
-          "Erro ao comunicar com o assistente. Verifique sua conexão."
-      );
+      setError(errorDetails);
     } finally {
       setIsLoading(false);
     }
