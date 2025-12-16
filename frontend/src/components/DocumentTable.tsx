@@ -38,21 +38,30 @@ export function DocumentTable({
     switch (status) {
       case StatusIndexacao.INDEXADO:
         return (
-          <Badge variant="success" className="flex items-center gap-1.5">
+          <Badge
+            variant="success"
+            className="flex items-center gap-1.5 w-fit px-3 py-1"
+          >
             <CheckCircle2 className="h-3 w-3" />
             Indexado
           </Badge>
         );
       case StatusIndexacao.PENDENTE:
         return (
-          <Badge variant="warning" className="flex items-center gap-1.5">
+          <Badge
+            variant="warning"
+            className="flex items-center gap-1.5 w-fit px-3 py-1"
+          >
             <Loader2 className="h-3 w-3 animate-spin" />
             Processando
           </Badge>
         );
       case StatusIndexacao.ERRO:
         return (
-          <Badge variant="error" className="flex items-center gap-1.5">
+          <Badge
+            variant="error"
+            className="flex items-center gap-1.5 w-fit px-3 py-1"
+          >
             <AlertCircle className="h-3 w-3" />
             Erro na Indexação
           </Badge>
@@ -107,8 +116,7 @@ export function DocumentTable({
       <Table>
         <TableHeader>
           <TableRow className="text-teal-950">
-            <TableHead>Título</TableHead>
-            <TableHead>Caminho do Arquivo</TableHead>
+            <TableHead className="min-w-[300px]">Título</TableHead>
             <TableHead>Status de Indexação</TableHead>
             <TableHead>Criado em</TableHead>
             <TableHead className="text-right">Ações</TableHead>
@@ -117,26 +125,28 @@ export function DocumentTable({
         <TableBody>
           {documents.map((doc) => (
             <TableRow key={doc.id}>
-              <TableCell className="font-medium">{doc.titulo}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {doc.caminho_arquivo}
+              <TableCell className="mr-auto">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  {onView ? (
+                    <button
+                      onClick={() => onView(doc.id)}
+                      className="font-medium hover:text-primary hover:underline cursor-pointer text-left"
+                      title="Clique para abrir o documento"
+                    >
+                      {doc.titulo}
+                    </button>
+                  ) : (
+                    <span className="font-medium">{doc.titulo}</span>
+                  )}
+                </div>
               </TableCell>
-              <TableCell>{getStatusBadge(doc.status_indexacao)}</TableCell>
               <TableCell className="text-muted-foreground">
                 {formatDate(doc.criado_em)}
               </TableCell>
+              <TableCell>{getStatusBadge(doc.status_indexacao)}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
-                  {onView && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onView(doc.id)}
-                      title="Abrir documento"
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
-                  )}
                   <Button
                     variant="ghost"
                     size="icon"

@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Document, CreateDocumentDto, UpdateDocumentDto, StatusIndexacao } from "../types/document.types";
+import {
+  Document,
+  CreateDocumentDto,
+  UpdateDocumentDto,
+  StatusIndexacao,
+} from "../types/document.types";
 import { documentService } from "../services/api";
 import { DocumentTable } from "../components/DocumentTable";
 import { DocumentForm } from "../components/DocumentForm";
 import { Button } from "../components/ui/button";
-import { Plus, CheckCircle2, AlertCircle, MessageSquare } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Plus, CheckCircle2, AlertCircle } from "lucide-react";
 
 export function KnowledgeBasePage() {
-  const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +30,7 @@ export function KnowledgeBasePage() {
       const data = await documentService.getAll();
       setDocuments(data);
     } catch (err: any) {
-      setError(
-        err.response?.data?.error || "Erro ao carregar documentos"
-      );
+      setError(err.response?.data?.error || "Erro ao carregar documentos");
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -46,7 +47,7 @@ export function KnowledgeBasePage() {
   useEffect(() => {
     // Verificar se há documentos pendentes
     const hasPending = documents.some(
-      doc => doc.status_indexacao === StatusIndexacao.PENDENTE
+      (doc) => doc.status_indexacao === StatusIndexacao.PENDENTE
     );
 
     if (hasPending) {
@@ -77,7 +78,9 @@ export function KnowledgeBasePage() {
   const handleCreate = async (data: CreateDocumentDto, file?: File) => {
     try {
       await documentService.create(data, file);
-      setSuccessMessage("Documento criado com sucesso! Aguardando indexação...");
+      setSuccessMessage(
+        "Documento criado com sucesso! Aguardando indexação..."
+      );
       setShowForm(false);
       await loadDocuments();
       // O polling será iniciado automaticamente pelo useEffect se houver documentos pendentes
@@ -136,23 +139,18 @@ export function KnowledgeBasePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-full bg-background overflow-y-auto">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Gestão da Base de Conhecimento</h1>
+            <h1 className="text-3xl font-normal tracking-tight text-foreground">
+              Gestão da Base de Conhecimento
+            </h1>
             <p className="text-muted-foreground mt-1">
               Gerencie os metadados dos documentos cadastrados
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => navigate("/chat")}
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Chat
-            </Button>
             <Button
               onClick={() => {
                 setEditingDocument(null);
@@ -184,17 +182,18 @@ export function KnowledgeBasePage() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Documentos Cadastrados</h2>
             <span className="text-sm text-muted-foreground">
-              {documents.length} {documents.length === 1 ? "documento" : "documentos"}
+              {documents.length}{" "}
+              {documents.length === 1 ? "documento" : "documentos"}
             </span>
           </div>
 
-            <DocumentTable
-              documents={documents}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-              onView={handleView}
-              isLoading={isLoading}
-            />
+          <DocumentTable
+            documents={documents}
+            onDelete={handleDelete}
+            onEdit={handleEdit}
+            onView={handleView}
+            isLoading={isLoading}
+          />
         </div>
 
         <DocumentForm

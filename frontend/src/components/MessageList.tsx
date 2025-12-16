@@ -1,5 +1,5 @@
 import { ChatMessage } from "../types/chat.types";
-import { Loader2, Bot, User } from "lucide-react";
+import { Loader2, Bot, User, AlertCircle, FileText } from "lucide-react";
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -30,51 +30,120 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
     );
   }
 
+  // Função para obter mensagem de status baseada no status
+  const getStatusMessage = (status?: ChatMessage["status"]): string => {
+    switch (status) {
+      case "rag":
+        return "A IA está consultando documentos internos...";
+      case "esaj_search":
+        return "Buscando processo no e-SAJ...";
+      case "esaj_download":
+        return "Processo encontrado. Baixando documento...";
+      case "loading":
+        return "Processando sua mensagem...";
+      default:
+        return "Pensando...";
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {messages.map((message) => (
-        <div
-          key={message.id}
-          className={`flex gap-3 ${
-            message.role === "user" ? "justify-end" : "justify-start"
-          }`}
-        >
-          {message.role === "assistant" && (
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="h-5 w-5 text-primary" />
-            </div>
-          )}
+      {messages.map((message) => {
+        const isStatusMessage = message.status && message.status !== "complete";
+        const isErrorMessage = message.isError;
 
+        return (
           <div
-            className={`max-w-[80%] rounded-lg px-4 py-2 ${
-              message.role === "user"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground"
+            key={message.id}
+            className={`flex gap-3 ${
+              message.role === "user" ? "justify-end" : "justify-start"
             }`}
           >
-            <p className="text-sm whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
-            <span
-              className={`text-xs mt-1 block ${
+            {message.role === "assistant" && (
+              <div
+                className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  isErrorMessage
+                    ? "bg-destructive/10"
+                    : isStatusMessage
+                    ? "bg-primary/10"
+                    : "bg-primary/10"
+                }`}
+              >
+                {isErrorMessage ? (
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                ) : isStatusMessage ? (
+                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                ) : (
+                  <Bot className="h-5 w-5 text-primary" />
+                )}
+              </div>
+            )}
+
+            <div
+              className={`max-w-[80%] rounded-lg px-4 py-2 ${
                 message.role === "user"
-                  ? "text-primary-foreground/70"
-                  : "text-muted-foreground"
+                  ? "bg-primary text-primary-foreground"
+                  : isErrorMessage
+                  ? "bg-destructive/10 border border-destructive/20 text-destructive"
+                  : isStatusMessage
+                  ? "bg-muted/50 text-muted-foreground border border-muted"
+                  : "bg-muted text-foreground"
               }`}
             >
-              {formatTime(message.timestamp)}
-            </span>
-          </div>
+              <p
+                className={`text-sm whitespace-pre-wrap break-words ${
+                  isErrorMessage ? "text-destructive" : ""
+                }`}
+              >
+                {isStatusMessage ? getStatusMessage(message.status) : message.content}
+              </p>
 
-          {message.role === "user" && (
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-              <User className="h-5 w-5 text-muted-foreground" />
+              {/* Exibir sources se disponíveis */}
+              {message.sources && message.sources.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Fontes usadas:
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {message.sources.map((source, index) => (
+                      <span
+                        key={`${source.document_id}-${source.chunk_index}`}
+                        className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md"
+                        title={`Score: ${source.score.toFixed(2)}`}
+                      >
+                        {source.titulo || `Documento ${index + 1}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <span
+                className={`text-xs mt-1 block ${
+                  message.role === "user"
+                    ? "text-primary-foreground/70"
+                    : isErrorMessage
+                    ? "text-destructive/70"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {formatTime(message.timestamp)}
+              </span>
             </div>
-          )}
-        </div>
-      ))}
 
-      {isLoading && (
+            {message.role === "user" && (
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                <User className="h-5 w-5 text-muted-foreground" />
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {isLoading && !messages.some(msg => msg.status && msg.status !== "complete") && (
         <div className="flex gap-3 justify-start">
           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
             <Bot className="h-5 w-5 text-primary" />
