@@ -13,12 +13,39 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middlewares
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || "http://localhost:5173",
+// Configurar CORS - aceitar múltiplas origens se necessário
+const corsOptions = {
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void
+  ) => {
+    // Lista de origens permitidas
+    const allowedOrigins = process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+      : process.env.FRONTEND_URL
+      ? [process.env.FRONTEND_URL]
+      : ["http://localhost:5173", "http://localhost:3000"];
+
+    // Em desenvolvimento, permitir requisições sem origin (Postman, curl, etc.)
+    if (!origin && process.env.NODE_ENV !== "production") {
+      return callback(null, true);
+    }
+
+    // Verificar se a origem está na lista permitida
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS bloqueado para origem: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  exposedHeaders: ["Content-Disposition"],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 /**
@@ -75,5 +102,9 @@ app.listen(PORT, () => {
     `📥 Download API disponível em http://localhost:${PORT}/download/file/:filename`
   );
   console.log(`📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`);
-  console.log(`🔍 RAG: Indexação vetorial ${process.env.QDRANT_URL ? "habilitada" : "desabilitada"}`);
+  console.log(
+    `🔍 RAG: Indexação vetorial ${
+      process.env.QDRANT_URL ? "habilitada" : "desabilitada"
+    }`
+  );
 });

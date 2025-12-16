@@ -8,12 +8,53 @@ import {
 } from "../types/document.types";
 import { ChatMessageRequest, ChatMessageResponse } from "../types/chat.types";
 
+// Validar e construir a URL da API
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+
+  // Se não há URL configurada, usar localhost apenas em desenvolvimento
+  if (!envUrl) {
+    if (import.meta.env.DEV) {
+      return "http://localhost:3000";
+    }
+    console.error(
+      "VITE_API_URL não está configurada! Configure a variável de ambiente na Vercel."
+    );
+    throw new Error(
+      "API URL não configurada. Configure VITE_API_URL na Vercel."
+    );
+  }
+
+  // Remover barra final se houver
+  return envUrl.replace(/\/$/, "");
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
+  baseURL: getApiUrl(),
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 30000, // 30 segundos de timeout
 });
+
+// Interceptor para log de erros
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      error.code === "ERR_NETWORK" ||
+      error.message.includes("Failed to fetch")
+    ) {
+      console.error("Erro de rede. Verifique:", {
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        message:
+          "Verifique se VITE_API_URL está configurada corretamente na Vercel",
+      });
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const documentService = {
   // Listar todos os documentos
