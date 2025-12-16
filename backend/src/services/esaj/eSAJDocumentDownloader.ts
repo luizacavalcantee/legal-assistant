@@ -191,7 +191,7 @@ export class eSAJDocumentDownloader extends eSAJBase {
               for (const selector of iframeSelectors) {
                 try {
                   iframe = await page.waitForSelector(selector, {
-                    timeout: 10000,
+                    timeout: 45000, // 45 segundos - e-SAJ pode ser lento
                   });
                   if (iframe) {
                     console.log(
@@ -848,7 +848,7 @@ export class eSAJDocumentDownloader extends eSAJBase {
 
       // Aguardar o iframe aparecer
       const iframe = await page.waitForSelector("iframe#documento", {
-        timeout: 15000,
+        timeout: 45000, // 45 segundos - e-SAJ pode ser lento
       });
 
       if (!iframe) {

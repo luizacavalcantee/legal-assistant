@@ -275,28 +275,45 @@ export function ChatPage() {
     setIsLoading(true);
     setError(null);
 
-    // Adicionar mensagem de status inicial genérica
+    // Adicionar mensagem de status inicial mais descritiva
     const initialStatusId = addStatusMessage(
       "loading",
-      "Processando sua mensagem..."
+      "🧠 Analisando sua mensagem e detectando a intenção..."
     );
+
+    // Atualizar mensagem após alguns segundos para mostrar progresso
+    const progressInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - parseInt(initialStatusId.split("-")[1])) / 1000);
+      if (elapsed > 3 && statusMessageIdRef.current === initialStatusId) {
+        replaceStatusMessage(initialStatusId, {
+          id: initialStatusId,
+          role: "assistant",
+          content: "⏳ Processando sua solicitação... Isso pode levar alguns segundos.",
+          timestamp: new Date().toISOString(),
+          status: "loading",
+        });
+      }
+    }, 1000);
 
     try {
       // Chamar API do backend
       const response = await chatService.sendMessage({ message });
 
-      // Remover mensagem de status inicial de forma síncrona
+      // Limpar intervalo de progresso
+      clearInterval(progressInterval);
+
+      // Remover mensagem de status inicial
       setMessages((prev) => prev.filter((msg) => msg.id !== initialStatusId));
       if (statusMessageIdRef.current === initialStatusId) {
         statusMessageIdRef.current = null;
       }
 
-      // Adicionar mensagens de status baseadas na intenção
+      // Adicionar mensagens de status baseadas na intenção com mais detalhes
       let statusId: string | null = null;
       if (response.intention === "RAG_QUERY") {
         statusId = addStatusMessage(
           "rag",
-          "A IA está consultando documentos internos..."
+          "📚 Buscando informações na base de conhecimento...\n\n🔍 Analisando documentos relevantes para sua pergunta."
         );
       } else if (
         response.intention === "DOWNLOAD_DOCUMENT" ||
@@ -307,12 +324,40 @@ export function ChatPage() {
         if (response.protocolNumber) {
           statusId = addStatusMessage(
             "esaj_search",
-            `Buscando processo ${response.protocolNumber} no e-SAJ...`
+            `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Isso pode levar até 1 minuto. Por favor, aguarde.`
           );
+          
+          // Atualizar mensagem após alguns segundos para mostrar progresso
+          setTimeout(() => {
+            if (statusId && statusMessageIdRef.current === statusId) {
+              replaceStatusMessage(statusId, {
+                id: statusId,
+                role: "assistant",
+                content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n📄 Acessando o portal e preenchendo o formulário de busca...`,
+                timestamp: new Date().toISOString(),
+                status: "esaj_search",
+              });
+            }
+          }, 10000);
+          
+          setTimeout(() => {
+            if (statusId && statusMessageIdRef.current === statusId) {
+              replaceStatusMessage(statusId, {
+                id: statusId,
+                role: "assistant",
+                content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Aguardando resposta do portal... Isso pode levar alguns segundos.`,
+                timestamp: new Date().toISOString(),
+                status: "esaj_search",
+              });
+            }
+          }, 20000);
         }
       } else {
-        // Para outras intenções (GENERAL_QUERY), não adicionar mensagem de status adicional
-        // A mensagem inicial já foi removida
+        // Para outras intenções (GENERAL_QUERY), adicionar mensagem mais descritiva
+        statusId = addStatusMessage(
+          "loading",
+          "🤔 Processando sua pergunta...\n\n💭 Gerando resposta personalizada para você."
+        );
       }
 
       // Simular delay mínimo para mostrar status (opcional)
@@ -322,12 +367,22 @@ export function ChatPage() {
       const downloadLink = extractDownloadLink(response.response);
       let displayContent = response.response;
 
-      // Se for download, adicionar status de download
+      // Se for download, adicionar status de download com mais detalhes
       if (response.intention === "DOWNLOAD_DOCUMENT" && statusId) {
         replaceStatusMessage(statusId, {
           id: statusId,
           role: "assistant",
-          content: "Processo encontrado. Baixando documento...",
+          content: "✅ Processo encontrado!\n\n📥 Acessando a pasta digital e preparando o download do documento...",
+          timestamp: new Date().toISOString(),
+          status: "esaj_download",
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        
+        // Atualizar para mostrar progresso do download
+        replaceStatusMessage(statusId, {
+          id: statusId,
+          role: "assistant",
+          content: "✅ Processo encontrado!\n\n📥 Baixando documento do e-SAJ... Isso pode levar alguns segundos.",
           timestamp: new Date().toISOString(),
           status: "esaj_download",
         });
@@ -363,6 +418,11 @@ export function ChatPage() {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err: any) {
       console.error("Erro ao enviar mensagem:", err);
+
+      // Limpar intervalo de progresso se existir
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
 
       // Remover mensagem de status se existir
       if (statusMessageIdRef.current) {

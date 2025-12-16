@@ -18,7 +18,10 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
   if (messages.length === 0 && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
-        <Bot className="h-16 w-16 text-muted-foreground mb-4" strokeWidth={1.5} />
+        <Bot
+          className="h-16 w-16 text-muted-foreground mb-4"
+          strokeWidth={1.5}
+        />
         <h3 className="text-lg font-semibold text-muted-foreground mb-2">
           Olá! Sou seu Assistente Jurídico
         </h3>
@@ -30,19 +33,19 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
     );
   }
 
-  // Função para obter mensagem de status baseada no status
+  // Função para obter mensagem de status baseada no status (fallback caso não tenha conteúdo)
   const getStatusMessage = (status?: ChatMessage["status"]): string => {
     switch (status) {
       case "rag":
-        return "A IA está consultando documentos internos...";
+        return "📚 Buscando informações na base de conhecimento...";
       case "esaj_search":
-        return "Buscando processo no e-SAJ...";
+        return "🔍 Buscando processo no portal e-SAJ...";
       case "esaj_download":
-        return "Processo encontrado. Baixando documento...";
+        return "📥 Baixando documento do e-SAJ...";
       case "loading":
-        return "Processando sua mensagem...";
+        return "⏳ Processando sua solicitação...";
       default:
-        return "Pensando...";
+        return "💭 Pensando...";
     }
   };
 
@@ -95,7 +98,9 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                   isErrorMessage ? "text-destructive" : ""
                 }`}
               >
-                {isStatusMessage ? getStatusMessage(message.status) : message.content}
+                {isStatusMessage
+                  ? getStatusMessage(message.status)
+                  : message.content}
               </p>
 
               {/* Exibir sources se disponíveis */}
@@ -143,20 +148,18 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
         );
       })}
 
-      {isLoading && !messages.some(msg => msg.status && msg.status !== "complete") && (
-        <div className="flex gap-3 justify-start">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <Bot className="h-5 w-5 text-primary" />
+      {isLoading &&
+        !messages.some((msg) => msg.status && msg.status !== "complete") && (
+          <div className="flex gap-3 justify-start">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <Bot className="h-5 w-5 text-primary" />
+            </div>
+            <div className="bg-muted rounded-lg px-4 py-2 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Pensando...</span>
+            </div>
           </div>
-          <div className="bg-muted rounded-lg px-4 py-2 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              Pensando...
-            </span>
-          </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }
-

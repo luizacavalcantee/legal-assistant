@@ -408,7 +408,7 @@ export class eSAJService extends eSAJBase {
       
       // Aguardar o botão aparecer dentro do iframe
       const downloadButton = await iframeFrame.waitForSelector("#download", {
-        timeout: 15000,
+        timeout: 45000, // 45 segundos - e-SAJ pode ser lento
         visible: true,
       });
 

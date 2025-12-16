@@ -45,7 +45,7 @@ export class eSAJProcessSearcher extends eSAJBase {
       page = await browser.newPage();
 
       // Configurar timeout
-      page.setDefaultTimeout(30000); // 30 segundos
+      page.setDefaultTimeout(45000); // 45 segundos - e-SAJ pode ser lento
 
       // Navegar para a página de consulta pública
       console.log(`📄 Navegando para ${this.eSAJUrl}...`);
@@ -125,7 +125,7 @@ export class eSAJProcessSearcher extends eSAJBase {
         // Aguardar navegação após clicar
         const navigationPromise = page.waitForNavigation({
           waitUntil: "networkidle2",
-          timeout: 15000,
+          timeout: 45000, // 45 segundos - e-SAJ pode ser lento
         });
 
         await consultButton.click();
@@ -143,7 +143,7 @@ export class eSAJProcessSearcher extends eSAJBase {
       // Aguardar o carregamento da página de resultados
       await new Promise((resolve) => setTimeout(resolve, 3000));
       await page
-        .waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 })
+        .waitForNavigation({ waitUntil: "networkidle2", timeout: 45000 }) // 45 segundos - e-SAJ pode ser lento
         .catch(() => {
           // Ignorar erro de timeout - a página pode já ter carregado
         });
