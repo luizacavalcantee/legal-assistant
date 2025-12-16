@@ -48,16 +48,16 @@ export class eSAJBase {
         let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
         
         if (!executablePath) {
+          // Verificar se o Chrome está no cache padrão do Puppeteer
+          const cacheDirs: string[] = [
+            process.env.PUPPETEER_CACHE_DIR,
+            process.env.HOME ? `${process.env.HOME}/.cache/puppeteer` : undefined,
+            "/opt/render/.cache/puppeteer",
+            "/root/.cache/puppeteer",
+          ].filter((dir): dir is string => Boolean(dir));
+          
           // Tentar encontrar o Chrome instalado pelo Puppeteer
           try {
-            // Verificar se o Chrome está no cache padrão do Puppeteer
-            const cacheDirs = [
-              process.env.PUPPETEER_CACHE_DIR,
-              process.env.HOME ? `${process.env.HOME}/.cache/puppeteer` : undefined,
-              "/opt/render/.cache/puppeteer",
-              "/root/.cache/puppeteer",
-            ].filter(Boolean);
-            
             // Procurar o Chrome nos diretórios de cache
             for (const cacheDir of cacheDirs) {
               if (!fs.existsSync(cacheDir)) continue;
@@ -99,7 +99,7 @@ export class eSAJBase {
                 }
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             // Se não conseguir encontrar, deixar o Puppeteer tentar automaticamente
             console.log("⚠️  Não foi possível detectar o caminho do Chrome automaticamente");
             console.log(`   Cache dirs verificados: ${cacheDirs.join(", ")}`);
