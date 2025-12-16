@@ -13,6 +13,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configurar para confiar no proxy reverso (Render, etc.)
+// Isso permite que req.protocol e req.get('host') funcionem corretamente
+app.set("trust proxy", true);
+
 // Middlewares
 // Configurar CORS - aceitar múltiplas origens se necessário
 const corsOptions = {

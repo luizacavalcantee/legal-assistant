@@ -165,8 +165,24 @@ export class ChatController {
                   // Verificar se o arquivo foi baixado com sucesso (filePath e fileName)
                   if (downloadResult.filePath && downloadResult.fileName) {
                     // Construir URL de download do servidor
-                    const baseUrl = `${req.protocol}://${req.get("host")}`;
+                    // Verificar se está usando HTTPS através de proxy reverso (Render, etc.)
+                    // Em produção, sempre usar HTTPS se não for localhost
+                    const host = req.get("host") || "";
+                    const isProduction = process.env.NODE_ENV === "production";
+                    const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+                    const forwardedProto = req.get("x-forwarded-proto");
+                    
+                    let protocol = req.protocol;
+                    if (forwardedProto === "https" || 
+                        process.env.FORCE_HTTPS === "true" ||
+                        (isProduction && !isLocalhost)) {
+                      protocol = "https";
+                    }
+                    
+                    const baseUrl = `${protocol}://${host}`;
                     const downloadUrl = `${baseUrl}/download/file/${encodeURIComponent(downloadResult.fileName)}`;
+                    
+                    console.log(`🔗 URL de download gerada: ${downloadUrl} (protocol: ${protocol}, forwarded-proto: ${forwardedProto})`);
                     
                     downloadUrlResponse = downloadUrl;
                     fileNameResponse = downloadResult.fileName;

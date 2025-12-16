@@ -147,6 +147,12 @@ export function ChatPage() {
         fullUrl = `${apiUrl}${url}`;
       }
       
+      // Garantir que a URL use HTTPS se o frontend estiver em HTTPS
+      if (window.location.protocol === "https:" && fullUrl.startsWith("http://")) {
+        fullUrl = fullUrl.replace("http://", "https://");
+        console.log("🔒 Convertendo URL para HTTPS:", fullUrl);
+      }
+      
       console.log("🔗 URL completa:", fullUrl);
       
       // Usar axios para fazer o download (já tem baseURL configurada)
@@ -181,6 +187,12 @@ export function ChatPage() {
         if (url.startsWith("/")) {
           const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
           fullUrl = `${apiUrl}${url}`;
+        }
+        
+        // Garantir que a URL use HTTPS se o frontend estiver em HTTPS
+        if (window.location.protocol === "https:" && fullUrl.startsWith("http://")) {
+          fullUrl = fullUrl.replace("http://", "https://");
+          console.log("🔒 Convertendo URL para HTTPS no fallback:", fullUrl);
         }
         
         console.log("🔄 Tentando fallback com fetch:", fullUrl);
