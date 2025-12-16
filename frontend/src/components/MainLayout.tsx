@@ -28,7 +28,7 @@ export function MainLayout() {
     }
   }, [chatId, navigate]);
 
-  const handleChatSelect = (selectedChatId: string) => {
+  const handleChatSelect = (_selectedChatId: string) => {
     // A navegação será feita pelo AppSidebar
   };
 

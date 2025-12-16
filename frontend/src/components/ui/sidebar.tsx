@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
-import { VariantProps, cva } from "class-variance-authority"
+import { cva } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "../../hooks/use-mobile"
@@ -471,7 +471,7 @@ const SidebarMenuButton = React.forwardRef<
     isActive?: boolean
     tooltip?: string | React.ComponentProps<typeof TooltipContent>
   }
->(({ asChild = false, isActive = false, variant = "default", size = "default", tooltip, className, ...props }, ref) => {
+>(({ asChild = false, isActive = false, tooltip, className, ...props }, ref) => {
   const Comp = asChild ? Slot : "button"
   const { isMobile, state } = useSidebar()
 

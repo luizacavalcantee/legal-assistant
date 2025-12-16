@@ -18,7 +18,9 @@ export function KnowledgeBasePage() {
   const [showForm, setShowForm] = useState(false);
   const [editingDocument, setEditingDocument] = useState<Document | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
 
   // Carregar documentos (sem mostrar loading se já tiver documentos)
   const loadDocuments = useCallback(async (showLoading = true) => {
@@ -75,9 +77,12 @@ export function KnowledgeBasePage() {
   }, [documents, loadDocuments]);
 
   // Criar novo documento
-  const handleCreate = async (data: CreateDocumentDto, file?: File) => {
+  const handleCreate = async (
+    data: CreateDocumentDto | UpdateDocumentDto,
+    file?: File
+  ) => {
     try {
-      await documentService.create(data, file);
+      await documentService.create(data as CreateDocumentDto, file);
       setSuccessMessage(
         "Documento criado com sucesso! Aguardando indexação..."
       );
@@ -91,11 +96,14 @@ export function KnowledgeBasePage() {
   };
 
   // Atualizar documento
-  const handleUpdate = async (data: UpdateDocumentDto) => {
+  const handleUpdate = async (data: CreateDocumentDto | UpdateDocumentDto) => {
     if (!editingDocument) return;
 
     try {
-      await documentService.update(editingDocument.id, data);
+      await documentService.update(
+        editingDocument.id,
+        data as UpdateDocumentDto
+      );
       setSuccessMessage("Documento atualizado com sucesso!");
       setShowForm(false);
       setEditingDocument(null);

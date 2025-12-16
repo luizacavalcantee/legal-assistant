@@ -22,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import { Upload } from "lucide-react";
 
 interface DocumentFormProps {
   onSubmit: (data: CreateDocumentDto | UpdateDocumentDto, file?: File) => Promise<void>;

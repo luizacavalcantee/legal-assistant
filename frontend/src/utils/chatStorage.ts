@@ -1,4 +1,4 @@
-import { ChatMessage, ChatSession } from "../types/chat.types";
+import { ChatSession } from "../types/chat.types";
 
 const STORAGE_KEY = "chat_sessions_juridico";
 
