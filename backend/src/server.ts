@@ -26,13 +26,24 @@ const corsOptions = {
   ) => {
     // Função para normalizar URLs (remover barra final e espaços)
     const normalizeUrl = (url: string) => url.trim().replace(/\/+$/, "");
-    
-    // Lista de origens permitidas (normalizadas)
-    const allowedOrigins = process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",").map((o) => normalizeUrl(o))
-      : process.env.FRONTEND_URL
-      ? [normalizeUrl(process.env.FRONTEND_URL)]
-      : ["http://localhost:5173", "http://localhost:3000"];
+
+    // Lista base de origens permitidas (sempre incluir localhost para desenvolvimento)
+    const baseOrigins = ["http://localhost:5173", "http://localhost:3000"];
+
+    // Adicionar origens da variável de ambiente se existir
+    let allowedOrigins: string[] = [...baseOrigins];
+
+    if (process.env.CORS_ORIGIN) {
+      const envOrigins = process.env.CORS_ORIGIN.split(",")
+        .map((o) => normalizeUrl(o))
+        .filter((o) => o && !baseOrigins.includes(o)); // Evitar duplicatas
+      allowedOrigins = [...allowedOrigins, ...envOrigins];
+    } else if (process.env.FRONTEND_URL) {
+      const frontendUrl = normalizeUrl(process.env.FRONTEND_URL);
+      if (!baseOrigins.includes(frontendUrl)) {
+        allowedOrigins.push(frontendUrl);
+      }
+    }
 
     // Em desenvolvimento, permitir requisições sem origin (Postman, curl, etc.)
     if (!origin && process.env.NODE_ENV !== "production") {
@@ -104,10 +115,10 @@ app.use("/download", downloadRoutes);
 app.use((err: any, req: Request, res: Response, next: any) => {
   console.error("Erro não tratado:", err);
   console.error("Stack:", err?.stack);
-  
+
   res.status(err.status || 500).json({
     error: err.message || "Erro interno do servidor",
-    details: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
+    details: process.env.NODE_ENV !== "production" ? err?.stack : undefined,
   });
 });
 
@@ -117,11 +128,11 @@ async function startServer() {
     // Testar conexão com o banco de dados
     await prisma.$connect();
     console.log("✅ Conexão com o banco de dados estabelecida");
-    
+
     // Testar query simples
     await prisma.$queryRaw`SELECT 1`;
     console.log("✅ Banco de dados está acessível");
-    
+
     // Verificar se a tabela existe, se não, criar manualmente
     try {
       await prisma.$queryRaw`SELECT 1 FROM base_de_conhecimento LIMIT 1`;
@@ -129,7 +140,7 @@ async function startServer() {
     } catch (tableError: any) {
       console.warn("⚠️  Tabela base_de_conhecimento não encontrada!");
       console.log("   Tentando criar tabela manualmente...");
-      
+
       try {
         // Criar enum se não existir
         await prisma.$executeRawUnsafe(`
@@ -139,7 +150,7 @@ async function startServer() {
             WHEN duplicate_object THEN null;
           END $$;
         `);
-        
+
         // Criar tabela se não existir
         await prisma.$executeRawUnsafe(`
           CREATE TABLE IF NOT EXISTS "base_de_conhecimento" (
@@ -151,7 +162,7 @@ async function startServer() {
             CONSTRAINT "base_de_conhecimento_pkey" PRIMARY KEY ("id")
           );
         `);
-        
+
         // Criar tabela de migrations do Prisma se não existir (para evitar problemas futuros)
         await prisma.$executeRawUnsafe(`
           CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
@@ -166,19 +177,21 @@ async function startServer() {
             CONSTRAINT "_prisma_migrations_pkey" PRIMARY KEY ("id")
           );
         `);
-        
+
         // Marcar a migration como aplicada
         await prisma.$executeRawUnsafe(`
           INSERT INTO "_prisma_migrations" ("id", "checksum", "migration_name", "started_at", "finished_at", "applied_steps_count")
           VALUES ('20251213004332_configuration', '', '20251213004332_configuration', NOW(), NOW(), 1)
           ON CONFLICT ("id") DO NOTHING;
         `);
-        
+
         console.log("✅ Tabela base_de_conhecimento criada com sucesso!");
       } catch (createError: any) {
         console.error("❌ Erro ao criar tabela:", createError.message);
         console.error("   Stack:", createError.stack);
-        throw new Error(`Não foi possível criar a tabela: ${createError.message}`);
+        throw new Error(
+          `Não foi possível criar a tabela: ${createError.message}`
+        );
       }
     }
   } catch (error: any) {
@@ -191,7 +204,9 @@ async function startServer() {
   // Iniciar servidor
   app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📍 Health check disponível em http://localhost:${PORT}/health`);
+    console.log(
+      `📍 Health check disponível em http://localhost:${PORT}/health`
+    );
     console.log(
       `📄 Documentos API disponível em http://localhost:${PORT}/documents`
     );
@@ -201,7 +216,9 @@ async function startServer() {
     console.log(
       `📥 Download API disponível em http://localhost:${PORT}/download/file/:filename`
     );
-    console.log(`📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`);
+    console.log(
+      `📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`
+    );
     console.log(
       `🔍 RAG: Indexação vetorial ${
         process.env.QDRANT_URL ? "habilitada" : "desabilitada"
