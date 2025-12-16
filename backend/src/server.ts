@@ -6,6 +6,7 @@ import { swaggerSpec } from "./config/swagger";
 import documentRoutes from "./routes/documentRoutes";
 import chatRoutes from "./routes/chatRoutes";
 import downloadRoutes from "./routes/downloadRoutes";
+import prisma from "./lib/prisma";
 
 dotenv.config();
 
@@ -95,23 +96,58 @@ app.use("/documents", documentRoutes);
 app.use("/chat", chatRoutes);
 app.use("/download", downloadRoutes);
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📍 Health check disponível em http://localhost:${PORT}/health`);
-  console.log(
-    `📄 Documentos API disponível em http://localhost:${PORT}/documents`
-  );
-  console.log(
-    `💬 Chat API disponível em http://localhost:${PORT}/chat/message`
-  );
-  console.log(
-    `📥 Download API disponível em http://localhost:${PORT}/download/file/:filename`
-  );
-  console.log(`📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`);
-  console.log(
-    `🔍 RAG: Indexação vetorial ${
-      process.env.QDRANT_URL ? "habilitada" : "desabilitada"
-    }`
-  );
+// Middleware de tratamento de erros global
+app.use((err: any, req: Request, res: Response, next: any) => {
+  console.error("Erro não tratado:", err);
+  console.error("Stack:", err?.stack);
+  
+  res.status(err.status || 500).json({
+    error: err.message || "Erro interno do servidor",
+    details: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
+  });
+});
+
+// Testar conexão com o banco de dados antes de iniciar o servidor
+async function startServer() {
+  try {
+    // Testar conexão com o banco de dados
+    await prisma.$connect();
+    console.log("✅ Conexão com o banco de dados estabelecida");
+    
+    // Testar query simples
+    await prisma.$queryRaw`SELECT 1`;
+    console.log("✅ Banco de dados está acessível");
+  } catch (error: any) {
+    console.error("❌ Erro ao conectar com o banco de dados:", error.message);
+    console.error("   Verifique se DATABASE_URL está configurada corretamente");
+    console.error("   Stack:", error.stack);
+    process.exit(1);
+  }
+
+  // Iniciar servidor
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`📍 Health check disponível em http://localhost:${PORT}/health`);
+    console.log(
+      `📄 Documentos API disponível em http://localhost:${PORT}/documents`
+    );
+    console.log(
+      `💬 Chat API disponível em http://localhost:${PORT}/chat/message`
+    );
+    console.log(
+      `📥 Download API disponível em http://localhost:${PORT}/download/file/:filename`
+    );
+    console.log(`📚 Swagger UI disponível em http://localhost:${PORT}/api-docs`);
+    console.log(
+      `🔍 RAG: Indexação vetorial ${
+        process.env.QDRANT_URL ? "habilitada" : "desabilitada"
+      }`
+    );
+  });
+}
+
+// Iniciar servidor com teste de conexão
+startServer().catch((error) => {
+  console.error("❌ Erro fatal ao iniciar servidor:", error);
+  process.exit(1);
 });

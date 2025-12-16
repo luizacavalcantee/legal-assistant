@@ -143,10 +143,18 @@ export class DocumentController {
         data: documents,
         total: documents.length,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao listar documentos:", error);
+      console.error("Stack:", error?.stack);
+      
+      // Retornar mensagem de erro mais detalhada em desenvolvimento
+      const errorMessage = process.env.NODE_ENV === 'production'
+        ? "Erro interno do servidor ao listar documentos"
+        : error?.message || "Erro desconhecido ao listar documentos";
+      
       return res.status(500).json({
-        error: "Erro interno do servidor ao listar documentos",
+        error: errorMessage,
+        details: process.env.NODE_ENV !== 'production' ? error?.stack : undefined,
       });
     }
   }

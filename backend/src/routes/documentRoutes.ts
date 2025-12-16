@@ -19,7 +19,9 @@ let indexingService: IndexingService | undefined = undefined;
 // Função para inicializar RAG
 async function initializeRAGServices(): Promise<void> {
   if (!process.env.QDRANT_URL) {
-    console.warn("⚠️  QDRANT_URL não definido. Indexação vetorial desabilitada.");
+    console.warn(
+      "⚠️  QDRANT_URL não definido. Indexação vetorial desabilitada."
+    );
     return;
   }
 
@@ -32,13 +34,16 @@ async function initializeRAGServices(): Promise<void> {
     // Inicializar coleção no Qdrant com timeout de 10 segundos
     try {
       const initPromise = qdrantClient.initializeCollection();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout ao inicializar Qdrant (10s)")), 10000)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Timeout ao inicializar Qdrant (10s)")),
+          10000
+        )
       );
-      
+
       await Promise.race([initPromise, timeoutPromise]);
       console.log("✅ Qdrant inicializado com sucesso");
-      
+
       indexingService = new IndexingService(
         qdrantClient,
         embeddingService,
@@ -49,7 +54,9 @@ async function initializeRAGServices(): Promise<void> {
     } catch (initError: any) {
       console.error("❌ Erro ao inicializar Qdrant:", initError.message);
       console.error("   Detalhes:", initError);
-      console.warn("⚠️  Indexação vetorial desabilitada. Verifique se o Qdrant está rodando.");
+      console.warn(
+        "⚠️  Indexação vetorial desabilitada. Verifique se o Qdrant está rodando."
+      );
       console.warn(`   URL configurada: ${process.env.QDRANT_URL}`);
       indexingService = undefined;
     }
@@ -64,11 +71,13 @@ async function initializeRAGServices(): Promise<void> {
 // Criar DocumentService com getter que verifica a variável compartilhada
 const service = new DocumentService(repository, undefined);
 // Substituir o getter do indexingService para verificar a variável compartilhada
-Object.defineProperty(service, 'indexingService', {
+Object.defineProperty(service, "indexingService", {
   get: () => indexingService,
-  set: (value) => { indexingService = value; },
+  set: (value) => {
+    indexingService = value;
+  },
   enumerable: true,
-  configurable: true
+  configurable: true,
 });
 
 const controller = new DocumentController(service);
@@ -92,7 +101,9 @@ router.post("/", (req, res, next) => {
     controller.create(req, res).catch(next);
   });
 });
-router.get("/", (req, res) => controller.list(req, res));
+router.get("/", (req, res, next) => {
+  controller.list(req, res).catch(next);
+});
 router.get("/:id", (req, res) => controller.getById(req, res));
 router.get("/:id/file", (req, res) => controller.getFile(req, res));
 router.put("/:id", (req, res) => controller.update(req, res));
