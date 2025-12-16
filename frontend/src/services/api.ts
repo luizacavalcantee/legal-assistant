@@ -34,7 +34,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 30000, // 30 segundos de timeout
+  timeout: 120000, // 120 segundos (2 minutos) de timeout para operações do e-SAJ
 });
 
 // Interceptor para log de erros

@@ -203,18 +203,22 @@ export function AppSidebar({ onChatSelect, onNewChat }: AppSidebarProps) {
                               <MessageSquare />
                               <span>{session.title}</span>
                             </SidebarMenuButton>
-                            <SidebarMenuAction
-                              showOnHover
-                              onClick={(e) => handleStartEdit(session, e)}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </SidebarMenuAction>
-                            <SidebarMenuAction
-                              showOnHover
-                              onClick={(e) => handleDeleteChat(session.id, e)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </SidebarMenuAction>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover/menu-item:opacity-100 md:transition-opacity">
+                              <button
+                                onClick={(e) => handleStartEdit(session, e)}
+                                className="flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground outline-none ring-sidebar-ring transition-transform hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0"
+                                title="Editar título"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => handleDeleteChat(session.id, e)}
+                                className="flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground outline-none ring-sidebar-ring transition-transform hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0"
+                                title="Excluir chat"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </>
                         )}
                       </SidebarMenuItem>
