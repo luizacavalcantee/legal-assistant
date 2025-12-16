@@ -44,6 +44,74 @@ export class eSAJBase {
   protected async initBrowser(): Promise<Browser> {
     if (!this.browser) {
       try {
+        // Tentar encontrar o executável do Chrome
+        let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+        
+        if (!executablePath) {
+          // Tentar encontrar o Chrome instalado pelo Puppeteer
+          try {
+            // Verificar se o Chrome está no cache padrão do Puppeteer
+            const cacheDirs = [
+              process.env.PUPPETEER_CACHE_DIR,
+              process.env.HOME ? `${process.env.HOME}/.cache/puppeteer` : undefined,
+              "/opt/render/.cache/puppeteer",
+              "/root/.cache/puppeteer",
+            ].filter(Boolean);
+            
+            // Procurar o Chrome nos diretórios de cache
+            for (const cacheDir of cacheDirs) {
+              if (!fs.existsSync(cacheDir)) continue;
+              
+              try {
+                // Listar diretórios chrome no cache
+                const chromeDir = path.join(cacheDir, "chrome");
+                if (fs.existsSync(chromeDir)) {
+                  const entries = fs.readdirSync(chromeDir);
+                  for (const entry of entries) {
+                    const chromePath = path.join(chromeDir, entry, "chrome-linux64", "chrome");
+                    if (fs.existsSync(chromePath) && fs.statSync(chromePath).isFile()) {
+                      executablePath = chromePath;
+                      console.log(`✅ Chrome encontrado em: ${executablePath}`);
+                      break;
+                    }
+                  }
+                  if (executablePath) break;
+                }
+              } catch (e) {
+                // Continuar procurando
+              }
+            }
+            
+            // Fallback: tentar usar Chrome do sistema (se disponível)
+            if (!executablePath) {
+              const systemChromePaths = [
+                "/usr/bin/google-chrome",
+                "/usr/bin/chromium",
+                "/usr/bin/chromium-browser",
+                "/usr/local/bin/chrome",
+              ];
+              
+              for (const chromePath of systemChromePaths) {
+                if (fs.existsSync(chromePath)) {
+                  executablePath = chromePath;
+                  console.log(`✅ Chrome do sistema encontrado em: ${executablePath}`);
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            // Se não conseguir encontrar, deixar o Puppeteer tentar automaticamente
+            console.log("⚠️  Não foi possível detectar o caminho do Chrome automaticamente");
+            console.log(`   Cache dirs verificados: ${cacheDirs.join(", ")}`);
+          }
+        }
+        
+        if (executablePath) {
+          console.log(`🔧 Usando Chrome em: ${executablePath}`);
+        } else {
+          console.log("🔧 Tentando usar Chrome padrão do Puppeteer...");
+        }
+        
         this.browser = await puppeteer.launch({
           headless: this.headless,
           args: [
@@ -55,9 +123,7 @@ export class eSAJBase {
             "--disable-web-security",
             "--disable-features=IsolateOrigins,site-per-process",
           ],
-          // Puppeteer deve encontrar o Chrome instalado automaticamente via postinstall
-          // Se necessário, pode ser configurado via PUPPETEER_EXECUTABLE_PATH
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+          executablePath: executablePath || undefined,
         });
 
         // Handler para desconexão inesperada
