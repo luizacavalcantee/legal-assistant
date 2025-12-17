@@ -1,144 +1,48 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { toast } from "react-toastify";
-import {
-  Document,
-  CreateDocumentDto,
-  UpdateDocumentDto,
-  StatusIndexacao,
-} from "../types/document.types";
-import { documentService } from "../services/api";
+import { useEffect } from "react";
+import { CreateDocumentDto, UpdateDocumentDto } from "../types/document.types";
 import { DocumentTable } from "../components/DocumentTable";
 import { DocumentForm } from "../components/DocumentForm";
 import { Button } from "../components/ui/button";
 import { Plus } from "lucide-react";
+import { useDocuments } from "../hooks/useDocuments";
+import { useDocumentPolling } from "../hooks/useDocumentPolling";
+import { useDocumentForm } from "../hooks/useDocumentForm";
 
 export function KnowledgeBasePage() {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingDocument, setEditingDocument] = useState<Document | null>(null);
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
-  );
+  // Hook para gerenciar documentos (CRUD)
+  const {
+    documents,
+    isLoading,
+    loadDocuments,
+    createDocument,
+    updateDocument,
+    deleteDocument,
+    viewDocument,
+  } = useDocuments();
 
-  // Carregar documentos (sem mostrar loading se já tiver documentos)
-  const loadDocuments = useCallback(async (showLoading = true) => {
-    if (showLoading) {
-      setIsLoading(true);
-    }
-    try {
-      const data = await documentService.getAll();
-      setDocuments(data);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Erro ao carregar documentos");
-    } finally {
-      if (showLoading) {
-        setIsLoading(false);
-      }
-    }
-  }, []);
+  // Hook para gerenciar formulário
+  const { showForm, editingDocument, openCreateForm, openEditForm, closeForm } =
+    useDocumentForm();
 
-  // Carregar documentos iniciais
+  // Hook para polling automático
+  useDocumentPolling(documents, () => loadDocuments(false));
+
+  // Carregar documentos ao montar
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
 
-  // Polling automático quando há documentos pendentes
-  useEffect(() => {
-    // Verificar se há documentos pendentes
-    const hasPending = documents.some(
-      (doc) => doc.status_indexacao === StatusIndexacao.PENDENTE
-    );
-
-    if (hasPending) {
-      // Iniciar polling a cada 3 segundos
-      if (!pollingIntervalRef.current) {
-        pollingIntervalRef.current = setInterval(() => {
-          loadDocuments(false); // Não mostrar loading durante polling
-        }, 3000);
-      }
-    } else {
-      // Parar polling se não houver documentos pendentes
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    }
-
-    // Limpar polling ao desmontar componente ou quando documents mudar
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
-  }, [documents, loadDocuments]);
-
-  // Criar novo documento
-  const handleCreate = async (
+  // Handler para criar/atualizar documento
+  const handleSubmit = async (
     data: CreateDocumentDto | UpdateDocumentDto,
     file?: File
   ) => {
-    try {
-      await documentService.create(data as CreateDocumentDto, file);
-      toast.success("Documento criado com sucesso! Aguardando indexação...");
-      setShowForm(false);
-      await loadDocuments();
-      // O polling será iniciado automaticamente pelo useEffect se houver documentos pendentes
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Erro ao criar documento");
-      throw err;
+    if (editingDocument) {
+      await updateDocument(editingDocument.id, data as UpdateDocumentDto);
+    } else {
+      await createDocument(data as CreateDocumentDto, file);
     }
-  };
-
-  // Atualizar documento
-  const handleUpdate = async (data: CreateDocumentDto | UpdateDocumentDto) => {
-    if (!editingDocument) return;
-
-    try {
-      await documentService.update(
-        editingDocument.id,
-        data as UpdateDocumentDto
-      );
-      toast.success("Documento atualizado com sucesso!");
-      setShowForm(false);
-      setEditingDocument(null);
-      await loadDocuments();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Erro ao atualizar documento");
-      throw err;
-    }
-  };
-
-  // Remover documento
-  const handleDelete = async (id: string) => {
-    try {
-      await documentService.delete(id);
-      toast.success("Documento removido com sucesso!");
-      await loadDocuments();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Erro ao remover documento");
-    }
-  };
-
-  // Editar documento
-  const handleEdit = (document: Document) => {
-    setEditingDocument(document);
-    setShowForm(true);
-  };
-
-  // Visualizar/Abrir documento
-  const handleView = (id: string) => {
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
-    const fileUrl = `${apiUrl}/documents/${id}/file`;
-    // Abrir em nova aba
-    window.open(fileUrl, "_blank");
-  };
-
-  // Cancelar formulário
-  const handleCancelForm = () => {
-    setShowForm(false);
-    setEditingDocument(null);
+    closeForm();
   };
 
   return (
@@ -150,21 +54,14 @@ export function KnowledgeBasePage() {
               Gestão da Base de Conhecimento
             </h1>
             <p className="text-muted-foreground mt-1">
-              Gerencie os documentos cadastrados que servirão de base de conhecimento para o chatbot.
+              Gerencie os documentos cadastrados que servirão de base de
+              conhecimento para o chatbot.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => {
-                setEditingDocument(null);
-                setShowForm(true);
-              }}
-              disabled={showForm}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Novo Documento
-            </Button>
-          </div>
+          <Button onClick={openCreateForm} disabled={showForm}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Documento
+          </Button>
         </header>
 
         <div className="space-y-4">
@@ -178,16 +75,16 @@ export function KnowledgeBasePage() {
 
           <DocumentTable
             documents={documents}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-            onView={handleView}
+            onDelete={deleteDocument}
+            onEdit={openEditForm}
+            onView={viewDocument}
             isLoading={isLoading}
           />
         </div>
 
         <DocumentForm
-          onSubmit={editingDocument ? handleUpdate : handleCreate}
-          onCancel={handleCancelForm}
+          onSubmit={handleSubmit}
+          onCancel={closeForm}
           initialData={
             editingDocument
               ? {
