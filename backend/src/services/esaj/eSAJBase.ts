@@ -1,6 +1,7 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 import * as fs from "fs";
 import * as path from "path";
+import type { ProgressCallback, ProgressUpdate } from "../../types/progress.types";
 
 /**
  * Classe base para serviços e-SAJ
@@ -11,6 +12,11 @@ export class eSAJBase {
   protected readonly eSAJUrl: string;
   protected readonly headless: boolean;
   protected readonly downloadsDir: string;
+  
+  /**
+   * Callback opcional para reportar progresso
+   */
+  protected progressCallback?: ProgressCallback;
 
   constructor(base?: eSAJBase) {
     // Se uma instância base for fornecida, reutilizar navegador e configurações
@@ -314,6 +320,34 @@ export class eSAJBase {
    */
   async cleanup(): Promise<void> {
     await this.closeBrowser();
+  }
+
+  /**
+   * Define o callback de progresso
+   */
+  setProgressCallback(callback: ProgressCallback | undefined): void {
+    this.progressCallback = callback;
+  }
+
+  /**
+   * Emite uma atualização de progresso
+   */
+  protected async emitProgress(update: ProgressUpdate): Promise<void> {
+    if (this.progressCallback) {
+      try {
+        await this.progressCallback(update);
+      } catch (error) {
+        // Não quebrar o fluxo se o callback falhar
+        console.warn("⚠️  Erro ao emitir progresso:", error);
+      }
+    }
+  }
+
+  /**
+   * Aguarda com timeout otimizado (reduzido de 2s para 1s quando possível)
+   */
+  protected async wait(ms: number = 1000): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 

@@ -66,10 +66,14 @@ export class eSAJService extends eSAJBase {
   /**
    * Busca um processo no e-SAJ pelo número de protocolo
    * @param protocolNumber - Número do protocolo do processo
+   * @param progressCallback - Callback opcional para reportar progresso
    * @returns Resultado da busca indicando se o processo foi encontrado
    */
-  async findProcess(protocolNumber: string): Promise<ProcessSearchResult> {
-    return this.processSearcher.findProcess(protocolNumber);
+  async findProcess(
+    protocolNumber: string,
+    progressCallback?: import("../types/progress.types").ProgressCallback
+  ): Promise<ProcessSearchResult> {
+    return this.processSearcher.findProcess(protocolNumber, progressCallback);
   }
 
   /**

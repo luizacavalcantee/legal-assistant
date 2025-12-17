@@ -129,8 +129,18 @@ export class ChatController {
             
             let processResult;
             try {
+              // Criar callback de progresso se disponível via query param ou header
+              const progressCallback = req.query.progress === 'true' || req.headers['x-want-progress'] === 'true'
+                ? (update: any) => {
+                    // Emitir progresso via SSE se disponível
+                    // Por enquanto, apenas logar (SSE será implementado em seguida)
+                    console.log(`📊 Progresso: ${update.stage} - ${update.message} (${update.progress || 0}%)`);
+                  }
+                : undefined;
+
               processResult = await this.eSAJService.findProcess(
-                protocolNumber
+                protocolNumber,
+                progressCallback
               );
             } catch (esajError: any) {
               console.error("❌ Erro ao acessar e-SAJ:", esajError.message);
