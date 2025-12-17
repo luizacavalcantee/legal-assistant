@@ -118,6 +118,8 @@ export class DocumentService {
     caminho_arquivo: string;
     status_indexacao: StatusIndexacao;
     criado_em: Date;
+    google_drive_file_id?: string | null;
+    google_drive_view_link?: string | null;
   }): DocumentResponse {
     return {
       id: document.id,
@@ -125,6 +127,8 @@ export class DocumentService {
       caminho_arquivo: document.caminho_arquivo,
       status_indexacao: document.status_indexacao,
       criado_em: document.criado_em,
+      google_drive_file_id: document.google_drive_file_id || null,
+      google_drive_view_link: document.google_drive_view_link || null,
     };
   }
 }

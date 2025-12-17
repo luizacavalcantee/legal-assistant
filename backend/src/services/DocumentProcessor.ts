@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import dotenv from "dotenv";
+import { GoogleDriveService } from "./GoogleDriveService";
 
 // pdf-parse versão 2.4.5 exporta PDFParse como classe
 const pdfParseModule = require("pdf-parse");
@@ -18,21 +19,43 @@ export interface Chunk {
 export class DocumentProcessor {
   private chunkSize: number;
   private chunkOverlap: number;
+  private googleDriveService: GoogleDriveService;
 
   constructor() {
     // Tamanho do chunk em caracteres (padrão: 1000)
     this.chunkSize = parseInt(process.env.CHUNK_SIZE || "1000");
     // Overlap entre chunks (padrão: 200 caracteres)
     this.chunkOverlap = parseInt(process.env.CHUNK_OVERLAP || "200");
+    this.googleDriveService = new GoogleDriveService();
   }
 
   /**
    * Lê o conteúdo de um arquivo baseado no caminho
-   * @param filePath - Caminho do arquivo
+   * Suporta arquivos locais e arquivos do Google Drive (formato: gdrive:FILE_ID)
+   * @param filePath - Caminho do arquivo ou ID do Google Drive (gdrive:FILE_ID)
    * @returns Conteúdo do arquivo como string
    */
   async readFileContent(filePath: string): Promise<string> {
     try {
+      // Verificar se é um arquivo do Google Drive
+      if (filePath.startsWith("gdrive:")) {
+        const fileId = filePath.replace("gdrive:", "");
+        console.log(`📁 Lendo arquivo do Google Drive: ${fileId}`);
+        
+        if (!this.googleDriveService.isConfigured()) {
+          throw new Error("Google Drive não está configurado");
+        }
+
+        const content = await this.googleDriveService.getFileContent(fileId);
+        if (!content) {
+          throw new Error(`Não foi possível ler conteúdo do arquivo ${fileId} do Google Drive`);
+        }
+
+        console.log(`✅ Conteúdo lido do Google Drive: ${(content.length / 1024).toFixed(2)}KB`);
+        return content;
+      }
+
+      // Arquivo local - processar normalmente
       // Se o caminho é absoluto ou começa com ./ ou .., usar diretamente
       // Caso contrário, assumir que é relativo ao diretório de documentos
       let fullPath: string;

@@ -18,9 +18,11 @@ export class GoogleDriveService {
   constructor() {
     // Credenciais do Google Drive (Service Account ou OAuth2)
     const credentials = this.getCredentials();
-    
+
     if (!credentials) {
-      console.warn("⚠️  Google Drive não configurado. Usando armazenamento local.");
+      console.warn(
+        "⚠️  Google Drive não configurado. Usando armazenamento local."
+      );
       return;
     }
 
@@ -64,7 +66,9 @@ export class GoogleDriveService {
   /**
    * Criar ou obter pasta no Google Drive
    */
-  private async getOrCreateFolder(folderName: string = "Assistente Juridico"): Promise<string | null> {
+  private async getOrCreateFolder(
+    folderName: string = "Assistente Juridico"
+  ): Promise<string | null> {
     if (this.folderId) {
       return this.folderId;
     }
@@ -95,7 +99,10 @@ export class GoogleDriveService {
 
       return folderResponse.data.id || null;
     } catch (error: any) {
-      console.error("❌ Erro ao criar/obter pasta no Google Drive:", error.message);
+      console.error(
+        "❌ Erro ao criar/obter pasta no Google Drive:",
+        error.message
+      );
       return null;
     }
   }
@@ -106,7 +113,11 @@ export class GoogleDriveService {
   async uploadFile(
     filePath: string,
     fileName?: string
-  ): Promise<{ fileId: string; webViewLink: string; webContentLink: string } | null> {
+  ): Promise<{
+    fileId: string;
+    webViewLink: string;
+    webContentLink: string;
+  } | null> {
     if (!this.drive) {
       console.warn("⚠️  Google Drive não disponível. Retornando null.");
       return null;
@@ -157,7 +168,10 @@ export class GoogleDriveService {
         webContentLink: response.data.webContentLink || "",
       };
     } catch (error: any) {
-      console.error("❌ Erro ao fazer upload para Google Drive:", error.message);
+      console.error(
+        "❌ Erro ao fazer upload para Google Drive:",
+        error.message
+      );
       throw error;
     }
   }
@@ -169,7 +183,11 @@ export class GoogleDriveService {
     buffer: Buffer,
     fileName: string,
     mimeType: string
-  ): Promise<{ fileId: string; webViewLink: string; webContentLink: string } | null> {
+  ): Promise<{
+    fileId: string;
+    webViewLink: string;
+    webContentLink: string;
+  } | null> {
     if (!this.drive) {
       console.warn("⚠️  Google Drive não disponível. Retornando null.");
       return null;
@@ -214,7 +232,10 @@ export class GoogleDriveService {
         webContentLink: response.data.webContentLink || "",
       };
     } catch (error: any) {
-      console.error("❌ Erro ao fazer upload para Google Drive:", error.message);
+      console.error(
+        "❌ Erro ao fazer upload para Google Drive:",
+        error.message
+      );
       throw error;
     }
   }
@@ -239,7 +260,106 @@ export class GoogleDriveService {
 
       return Buffer.from(response.data);
     } catch (error: any) {
-      console.error("❌ Erro ao fazer download do Google Drive:", error.message);
+      console.error(
+        "❌ Erro ao fazer download do Google Drive:",
+        error.message
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Obter conteúdo de arquivo do Google Drive como string (para RAG)
+   * Suporta PDF e arquivos de texto
+   */
+  async getFileContent(fileId: string): Promise<string | null> {
+    if (!this.drive) {
+      console.warn("⚠️  Google Drive não disponível. Retornando null.");
+      return null;
+    }
+
+    try {
+      // Primeiro, obter metadados do arquivo para determinar o tipo
+      const fileMetadata = await this.drive.files.get({
+        fileId: fileId,
+        fields: "mimeType, name",
+      });
+
+      const mimeType = fileMetadata.data.mimeType || "";
+      const fileName = fileMetadata.data.name || "";
+
+      // Baixar arquivo
+      const fileBuffer = await this.downloadFile(fileId);
+      if (!fileBuffer) {
+        return null;
+      }
+
+      // Processar baseado no tipo MIME
+      if (
+        mimeType === "application/pdf" ||
+        fileName.toLowerCase().endsWith(".pdf")
+      ) {
+        // Processar PDF usando pdf-parse
+        const pdfParseModule = require("pdf-parse");
+        const PDFParse = pdfParseModule.PDFParse;
+
+        const parser = new PDFParse({
+          data: fileBuffer,
+          verbosity: 0,
+        });
+
+        await parser.load();
+        const totalPages = parser.doc.numPages;
+
+        const textParts: string[] = [];
+        const pagesPerBatch = 5;
+
+        for (
+          let startPage = 1;
+          startPage <= totalPages;
+          startPage += pagesPerBatch
+        ) {
+          const endPage = Math.min(startPage + pagesPerBatch - 1, totalPages);
+          const result = await parser.getText({
+            first: startPage,
+            last: endPage,
+            parseHyperlinks: false,
+            parsePageInfo: false,
+            pageJoiner: "\n",
+          });
+          textParts.push(result.text);
+        }
+
+        const fullText = textParts.join("\n\n");
+
+        if (parser && typeof parser.destroy === "function") {
+          try {
+            await parser.destroy();
+          } catch (e) {
+            // Ignorar erros
+          }
+        }
+
+        return fullText;
+      } else if (
+        mimeType === "text/plain" ||
+        mimeType === "text/markdown" ||
+        fileName.toLowerCase().endsWith(".txt") ||
+        fileName.toLowerCase().endsWith(".md")
+      ) {
+        // Arquivo de texto
+        return fileBuffer.toString("utf-8");
+      } else {
+        console.warn(
+          `⚠️  Tipo de arquivo não suportado para extração de texto: ${mimeType}`
+        );
+        return null;
+      }
+    } catch (error: any) {
+      console.error(
+        "❌ Erro ao obter conteúdo do arquivo do Google Drive:",
+        error.message
+      );
       return null;
     }
   }
@@ -279,7 +399,10 @@ export class GoogleDriveService {
       });
       return true;
     } catch (error: any) {
-      console.error("❌ Erro ao deletar arquivo do Google Drive:", error.message);
+      console.error(
+        "❌ Erro ao deletar arquivo do Google Drive:",
+        error.message
+      );
       return false;
     }
   }
@@ -306,4 +429,3 @@ export class GoogleDriveService {
     return this.drive !== undefined && this.drive !== null;
   }
 }
-

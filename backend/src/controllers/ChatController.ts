@@ -7,22 +7,29 @@ import { IntentDetectionService, UserIntent } from "../services/IntentDetectionS
 import { eSAJService as eSAJServiceClass } from "../services/eSAJService";
 import type { eSAJService } from "../services/eSAJService";
 import { ChatMessageRequest, ChatMessageResponse } from "../types/chat.types";
+import { GoogleDriveService } from "../services/GoogleDriveService";
+import { DocumentService } from "../services/DocumentService";
 
 export class ChatController {
   private llmService: LLMService;
   private ragChainService?: RAGChainService;
   private intentDetectionService: IntentDetectionService;
   private eSAJService: eSAJServiceClass;
+  private googleDriveService: GoogleDriveService;
+  private documentService?: DocumentService;
 
   constructor(
     llmService: LLMService,
     ragChainService?: RAGChainService,
-    eSAJService?: eSAJServiceClass
+    eSAJService?: eSAJServiceClass,
+    documentService?: DocumentService
   ) {
     this.llmService = llmService;
     this.ragChainService = ragChainService;
     this.intentDetectionService = new IntentDetectionService(llmService);
     this.eSAJService = eSAJService ?? new eSAJServiceClass();
+    this.googleDriveService = new GoogleDriveService();
+    this.documentService = documentService;
   }
 
       /**
@@ -164,34 +171,116 @@ export class ChatController {
                 if (downloadResult.success) {
                   // Verificar se o arquivo foi baixado com sucesso (filePath e fileName)
                   if (downloadResult.filePath && downloadResult.fileName) {
-                    // Construir URL de download do servidor
-                    // Verificar se está usando HTTPS através de proxy reverso (Render, etc.)
-                    // Em produção, sempre usar HTTPS se não for localhost
-                    const host = req.get("host") || "";
-                    const isProduction = process.env.NODE_ENV === "production";
-                    const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-                    const forwardedProto = req.get("x-forwarded-proto");
-                    
-                    let protocol = req.protocol;
-                    if (forwardedProto === "https" || 
-                        process.env.FORCE_HTTPS === "true" ||
-                        (isProduction && !isLocalhost)) {
-                      protocol = "https";
+                    let googleDriveFileId: string | undefined;
+                    let googleDriveViewLink: string | undefined;
+                    let finalFilePath = downloadResult.filePath;
+
+                    // ETAPA 15: Upload automático para Google Drive (US-GDRIVE-01)
+                    if (this.googleDriveService.isConfigured()) {
+                      try {
+                        console.log(`📤 Fazendo upload para Google Drive...`);
+                        const driveResult = await this.googleDriveService.uploadFile(
+                          downloadResult.filePath,
+                          downloadResult.fileName
+                        );
+
+                        if (driveResult) {
+                          googleDriveFileId = driveResult.fileId;
+                          googleDriveViewLink = driveResult.webViewLink;
+                          console.log(`✅ Arquivo enviado para Google Drive: ${driveResult.fileId}`);
+                          console.log(`   Link de visualização: ${driveResult.webViewLink}`);
+
+                          // Limpar arquivo local após upload bem-sucedido
+                          try {
+                            if (fs.existsSync(downloadResult.filePath)) {
+                              fs.unlinkSync(downloadResult.filePath);
+                              console.log(`🗑️  Arquivo local removido: ${downloadResult.filePath}`);
+                            }
+                          } catch (unlinkError: any) {
+                            console.warn(`⚠️  Erro ao remover arquivo local: ${unlinkError.message}`);
+                          }
+
+                          // Atualizar caminho para referenciar Google Drive
+                          finalFilePath = `gdrive:${driveResult.fileId}`;
+                        } else {
+                          console.warn(`⚠️  Upload para Google Drive falhou. Mantendo arquivo local.`);
+                        }
+                      } catch (driveError: any) {
+                        console.error(`❌ Erro ao fazer upload para Google Drive:`, driveError);
+                        console.log(`   Mantendo arquivo local como fallback`);
+                      }
                     }
-                    
-                    const baseUrl = `${protocol}://${host}`;
-                    const downloadUrl = `${baseUrl}/download/file/${encodeURIComponent(downloadResult.fileName)}`;
-                    
-                    console.log(`🔗 URL de download gerada: ${downloadUrl} (protocol: ${protocol}, forwarded-proto: ${forwardedProto})`);
+
+                    // ETAPA 16: Criar documento na Base de Conhecimento para RAG (US-GDRIVE-02)
+                    if (this.documentService) {
+                      try {
+                        const documentTitle = `${downloadResult.documentType || "Documento"} - Processo ${protocolNumber}`;
+                        const document = await this.documentService.createDocument(
+                          {
+                            titulo: documentTitle,
+                            caminho_arquivo: finalFilePath,
+                          },
+                          googleDriveFileId ? undefined : downloadResult.filePath // Só passar filePath se não for Google Drive
+                        );
+
+                        // Atualizar com metadados do Google Drive se disponível
+                        if (googleDriveFileId && googleDriveViewLink) {
+                          const { DocumentRepository } = require("../repositories/DocumentRepository");
+                          const repository = new DocumentRepository();
+                          await repository.update(document.id, {
+                            google_drive_file_id: googleDriveFileId,
+                            google_drive_view_link: googleDriveViewLink,
+                          });
+                          console.log(`✅ Documento criado na base de conhecimento com ID: ${document.id}`);
+                          console.log(`   Google Drive ID: ${googleDriveFileId}`);
+                        } else {
+                          console.log(`✅ Documento criado na base de conhecimento com ID: ${document.id}`);
+                        }
+                      } catch (docError: any) {
+                        console.error(`❌ Erro ao criar documento na base de conhecimento:`, docError);
+                        // Não falhar a resposta se houver erro ao criar documento
+                      }
+                    }
+
+                    // Construir URL de download/visualização
+                    let downloadUrl: string;
+                    if (googleDriveViewLink) {
+                      // Usar link do Google Drive se disponível
+                      downloadUrl = googleDriveViewLink;
+                      response =
+                        `✅ Documento baixado e enviado para Google Drive com sucesso!\n\n` +
+                        `📄 Visualize o documento clicando no link abaixo:\n` +
+                        `${googleDriveViewLink}\n\n` +
+                        `📋 Nome do arquivo: ${downloadResult.fileName}\n` +
+                        `☁️  O documento foi salvo na nuvem e será indexado para uso no RAG.`;
+                    } else {
+                      // Fallback: usar servidor local
+                      const host = req.get("host") || "";
+                      const isProduction = process.env.NODE_ENV === "production";
+                      const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+                      const forwardedProto = req.get("x-forwarded-proto");
+                      
+                      let protocol = req.protocol;
+                      if (forwardedProto === "https" || 
+                          process.env.FORCE_HTTPS === "true" ||
+                          (isProduction && !isLocalhost)) {
+                        protocol = "https";
+                      }
+                      
+                      const baseUrl = `${protocol}://${host}`;
+                      downloadUrl = `${baseUrl}/download/file/${encodeURIComponent(downloadResult.fileName)}`;
+                      
+                      console.log(`🔗 URL de download gerada: ${downloadUrl} (protocol: ${protocol}, forwarded-proto: ${forwardedProto})`);
+                      
+                      response =
+                        `✅ Documento baixado com sucesso!\n\n` +
+                        `📄 Clique no link abaixo para baixar o documento:\n` +
+                        `${downloadUrl}\n\n` +
+                        `📋 Nome do arquivo: ${downloadResult.fileName}`;
+                    }
                     
                     downloadUrlResponse = downloadUrl;
                     fileNameResponse = downloadResult.fileName;
-
-                    response =
-                      `✅ Documento baixado com sucesso!\n\n` +
-                      `📄 Clique no link abaixo para baixar o documento:\n` +
-                      `${downloadUrl}\n\n` +
-                      `📋 Nome do arquivo: ${downloadResult.fileName}`;
                   } else if (downloadResult.pdfUrl) {
                     // Fallback: Se não foi baixado mas tem URL do PDF (comportamento antigo)
                     downloadUrlResponse = downloadResult.pdfUrl;

@@ -25,7 +25,7 @@ export class IndexingService {
   /**
    * Indexa um documento completo: processa, gera embeddings e salva no Qdrant
    * @param documentId - ID do documento no banco
-   * @param filePath - Caminho do arquivo
+   * @param filePath - Caminho do arquivo (pode ser local ou gdrive:FILE_ID)
    * @param titulo - Título do documento
    */
   async indexDocument(
@@ -36,6 +36,15 @@ export class IndexingService {
     try {
       console.log(`📄 Iniciando indexação do documento: ${titulo} (ID: ${documentId})`);
       console.log(`   📁 Arquivo: ${filePath}`);
+
+      // Buscar informações do documento no banco (incluindo Google Drive)
+      const document = await this.repository.findById(documentId);
+      const googleDriveFileId: string | null = document?.google_drive_file_id || null;
+      const googleDriveViewLink: string | null = document?.google_drive_view_link || null;
+
+      if (googleDriveFileId) {
+        console.log(`   ☁️  Documento está no Google Drive: ${googleDriveFileId}`);
+      }
 
       // 1. Processar documento (ler e fazer chunking)
       console.log(`   🔍 Lendo e processando arquivo...`);
@@ -92,16 +101,33 @@ export class IndexingService {
           const qdrantBatch = batch.slice(j, j + qdrantBatchSize);
           const qdrantEmbeddings = embeddings.slice(j, j + qdrantBatchSize);
 
-          const points = qdrantBatch.map((chunk, idx) => ({
-            id: `${documentId}-${chunk.index}`,
-            vector: qdrantEmbeddings[idx],
-            payload: {
+          const points = qdrantBatch.map((chunk, idx) => {
+            const payload: any = {
               text: chunk.text,
               document_id: documentId,
               chunk_index: chunk.index,
               titulo: titulo,
-            },
-          }));
+            };
+
+            // Adicionar informações do Google Drive se disponível
+            if (googleDriveFileId) {
+              payload.google_drive_file_id = googleDriveFileId;
+            }
+            if (googleDriveViewLink) {
+              payload.google_drive_view_link = googleDriveViewLink;
+            }
+            if (filePath.startsWith("gdrive:")) {
+              payload.source = "google_drive";
+            } else {
+              payload.source = "local";
+            }
+
+            return {
+              id: `${documentId}-${chunk.index}`,
+              vector: qdrantEmbeddings[idx],
+              payload: payload,
+            };
+          });
 
           // Inserir lote no Qdrant
           console.log(`   💾 Inserindo ${points.length} pontos no Qdrant...`);

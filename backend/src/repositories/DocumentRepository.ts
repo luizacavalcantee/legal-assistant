@@ -6,12 +6,16 @@ export class DocumentRepository {
     titulo: string;
     caminho_arquivo: string;
     status_indexacao?: StatusIndexacao;
+    google_drive_file_id?: string;
+    google_drive_view_link?: string;
   }): Promise<BaseDeConhecimento> {
     return await prisma.baseDeConhecimento.create({
       data: {
         titulo: data.titulo,
         caminho_arquivo: data.caminho_arquivo,
         status_indexacao: data.status_indexacao || StatusIndexacao.PENDENTE,
+        google_drive_file_id: data.google_drive_file_id || null,
+        google_drive_view_link: data.google_drive_view_link || null,
       },
     });
   }
@@ -36,6 +40,8 @@ export class DocumentRepository {
       titulo?: string;
       caminho_arquivo?: string;
       status_indexacao?: StatusIndexacao;
+      google_drive_file_id?: string;
+      google_drive_view_link?: string;
     }
   ): Promise<BaseDeConhecimento> {
     return await prisma.baseDeConhecimento.update({

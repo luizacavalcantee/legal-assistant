@@ -5,6 +5,10 @@ import { RAGChainService } from "../services/RAGChainService";
 import { eSAJService } from "../services/eSAJService";
 import { getQdrantClient } from "../lib/qdrant";
 import { EmbeddingService } from "../services/EmbeddingService";
+import { DocumentService } from "../services/DocumentService";
+import { DocumentRepository } from "../repositories/DocumentRepository";
+import { IndexingService } from "../services/IndexingService";
+import { DocumentProcessor } from "../services/DocumentProcessor";
 
 const router = Router();
 
@@ -39,10 +43,40 @@ if (process.env.QDRANT_URL) {
   console.warn("⚠️  QDRANT_URL não definido. Chat funcionará sem RAG (apenas LLM direto)");
 }
 
+// Inicializar DocumentService para integração com Google Drive e Base de Conhecimento
+let documentService: DocumentService | undefined = undefined;
+
+if (process.env.QDRANT_URL) {
+  try {
+    console.log("🔧 Inicializando DocumentService para integração com Google Drive...");
+    const qdrantClient = getQdrantClient();
+    const embeddingService = new EmbeddingService();
+    const documentProcessor = new DocumentProcessor();
+    const documentRepository = new DocumentRepository();
+
+    const indexingService = new IndexingService(
+      qdrantClient,
+      embeddingService,
+      documentProcessor,
+      documentRepository
+    );
+
+    documentService = new DocumentService(documentRepository, indexingService);
+    console.log("✅ DocumentService inicializado com sucesso");
+  } catch (error: any) {
+    console.error("❌ Erro ao inicializar DocumentService:", error.message);
+    console.warn("⚠️  Documentos do e-SAJ não serão salvos na Base de Conhecimento");
+    documentService = undefined;
+  }
+} else {
+  console.warn("⚠️  QDRANT_URL não definido. DocumentService não será inicializado.");
+}
+
 const chatController = new ChatController(
   llmService,
   ragChainService,
-  eSAJServiceInstance
+  eSAJServiceInstance,
+  documentService
 );
 
 // Rota para enviar mensagem ao chat

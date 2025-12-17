@@ -16,12 +16,13 @@ enum StatusIndexacao {
 }
 
 model BaseDeConhecimento {
-  id              String          @id @default(uuid())
-  titulo          String
-  caminho_arquivo String
-  status_indexacao StatusIndexacao @default(PENDENTE)
-  criado_em       DateTime        @default(now())
+  id                     String          @id @default(uuid())
+  titulo                 String
+  caminho_arquivo        String
+  status_indexacao       StatusIndexacao @default(PENDENTE)
+  criado_em              DateTime        @default(now())
+  google_drive_file_id   String? // ID do arquivo no Google Drive
+  google_drive_view_link String? // URL de visualização no Google Drive
 
   @@map("base_de_conhecimento")
 }
-
