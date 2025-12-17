@@ -337,20 +337,27 @@ export class eSAJBase {
       } catch (error: any) {
         console.error("❌ Erro ao inicializar Puppeteer:", error.message);
         console.error("   Stack:", error.stack);
-        
+
         // Mensagens de diagnóstico detalhadas
         const errorMsg = error.message || "";
         let detailedError = "Erro ao inicializar o navegador Chrome. ";
-        
-        if (errorMsg.includes("Target closed") || errorMsg.includes("Protocol error")) {
-          detailedError += "O navegador foi fechado inesperadamente durante a inicialização. " +
+
+        if (
+          errorMsg.includes("Target closed") ||
+          errorMsg.includes("Protocol error")
+        ) {
+          detailedError +=
+            "O navegador foi fechado inesperadamente durante a inicialização. " +
             "Isso pode ocorrer por falta de memória ou recursos do sistema.";
-        } else if (errorMsg.includes("Failed to launch") || errorMsg.includes("Could not find")) {
+        } else if (
+          errorMsg.includes("Failed to launch") ||
+          errorMsg.includes("Could not find")
+        ) {
           detailedError += "Chrome/Chromium não foi encontrado no sistema.";
         } else {
           detailedError += errorMsg;
         }
-        
+
         console.error(`\n⚠️  DIAGNÓSTICO:`);
         console.error(`   ${detailedError}`);
         console.error(`\n💡 SOLUÇÕES:`);
@@ -358,10 +365,12 @@ export class eSAJBase {
         console.error(`   2. Em ambiente Linux/Docker: Instale chromium`);
         console.error(`      apt-get install -y chromium-browser`);
         console.error(`   3. No Render.com: Adicione buildpack do Chrome`);
-        console.error(`      https://github.com/heroku/heroku-buildpack-google-chrome`);
+        console.error(
+          `      https://github.com/heroku/heroku-buildpack-google-chrome`
+        );
         console.error(`   4. Defina PUPPETEER_EXECUTABLE_PATH no .env`);
         console.error(`   5. Aumente a memória disponível para o processo\n`);
-        
+
         throw new Error(
           `Não foi possível inicializar o navegador para acessar o e-SAJ. ${detailedError}`
         );
@@ -391,7 +400,7 @@ export class eSAJBase {
       try {
         const pages = await this.browser.pages();
         console.log(`🔍 Fechando ${pages.length} página(s) abertas...`);
-        
+
         // Fechar todas as páginas antes de fechar o navegador
         await Promise.all(
           pages.map(async (page) => {
@@ -404,8 +413,13 @@ export class eSAJBase {
             }
           })
         );
-      await this.browser.close();
-      this.browser = null;
+
+        await this.browser.close();
+        this.browser = null;
+      } catch (error: any) {
+        console.warn(`⚠️  Erro ao fechar navegador: ${error.message}`);
+        this.browser = null;
+      }
     }
   }
 
