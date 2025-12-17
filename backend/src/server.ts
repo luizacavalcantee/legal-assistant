@@ -225,6 +225,54 @@ async function startServer() {
         );
       }
     }
+
+    // Sempre verificar e criar colunas do Google Drive (mesmo se a tabela já existir)
+    try {
+      // Verificar se google_drive_file_id existe
+      const hasFileId = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_schema = 'public'
+          AND table_name = 'base_de_conhecimento' 
+          AND column_name = 'google_drive_file_id'
+        ) as exists;
+      `;
+
+      if (!hasFileId[0]?.exists) {
+        await prisma.$executeRawUnsafe(`
+          ALTER TABLE "base_de_conhecimento" ADD COLUMN "google_drive_file_id" TEXT;
+        `);
+        console.log("✅ Coluna google_drive_file_id criada");
+      }
+
+      // Verificar se google_drive_view_link existe
+      const hasViewLink = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_schema = 'public'
+          AND table_name = 'base_de_conhecimento' 
+          AND column_name = 'google_drive_view_link'
+        ) as exists;
+      `;
+
+      if (!hasViewLink[0]?.exists) {
+        await prisma.$executeRawUnsafe(`
+          ALTER TABLE "base_de_conhecimento" ADD COLUMN "google_drive_view_link" TEXT;
+        `);
+        console.log("✅ Coluna google_drive_view_link criada");
+      }
+
+      if (hasFileId[0]?.exists && hasViewLink[0]?.exists) {
+        console.log("✅ Colunas do Google Drive já existem");
+      }
+    } catch (columnError: any) {
+      console.warn(
+        "⚠️  Erro ao verificar/criar colunas do Google Drive:",
+        columnError.message
+      );
+      // Não falhar o servidor se houver erro ao criar colunas
+      // O sistema continuará funcionando com fallback no DocumentRepository
+    }
   } catch (error: any) {
     console.error("❌ Erro ao conectar com o banco de dados:", error.message);
     console.error("   Verifique se DATABASE_URL está configurada corretamente");
