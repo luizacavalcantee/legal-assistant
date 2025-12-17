@@ -7,7 +7,7 @@ const swaggerDefinition: SwaggerDefinition = {
     title: "Assistente Jurídico API",
     version: "1.0.0",
     description:
-      "API REST para Assistente Jurídico Inteligente com RAG, integração e-SAJ, resumo de processos e download de documentos",
+      "API REST para Assistente Jurídico Inteligente com RAG (Retrieval-Augmented Generation), integração e-SAJ, resumo de processos judiciais, download de documentos, e armazenamento em Google Drive",
     contact: {
       name: "Assistente Jurídico",
     },
@@ -54,20 +54,33 @@ const swaggerDefinition: SwaggerDefinition = {
           },
           caminho_arquivo: {
             type: "string",
-            description: "Caminho ou referência ao arquivo",
+            description: "Caminho ou referência ao arquivo (pode ser caminho local ou 'gdrive:FILE_ID' para Google Drive)",
             example: "/documentos/lei-13105-2015.pdf",
           },
           status_indexacao: {
             type: "string",
             enum: ["PENDENTE", "INDEXADO", "ERRO"],
             description: "Status da indexação no sistema RAG",
-            example: "PENDENTE",
+            example: "INDEXADO",
           },
           criado_em: {
             type: "string",
             format: "date-time",
             description: "Data de criação do documento",
             example: "2025-12-12T20:00:00.000Z",
+          },
+          google_drive_file_id: {
+            type: "string",
+            nullable: true,
+            description: "ID do arquivo no Google Drive (se armazenado na nuvem)",
+            example: "1a2b3c4d5e6f7g8h9i0j",
+          },
+          google_drive_view_link: {
+            type: "string",
+            nullable: true,
+            format: "uri",
+            description: "URL de visualização do arquivo no Google Drive",
+            example: "https://drive.google.com/file/d/1a2b3c4d5e6f7g8h9i0j/view",
           },
         },
         required: [
@@ -191,7 +204,7 @@ const swaggerDefinition: SwaggerDefinition = {
           intention: {
             type: "string",
             enum: ["RAG_QUERY", "DOWNLOAD_DOCUMENT", "SUMMARIZE_PROCESS", "SUMMARIZE_DOCUMENT", "QUERY_DOCUMENT", "GENERAL_QUERY"],
-            description: "Intenção detectada do usuário",
+            description: "Intenção detectada do usuário pelo sistema de detecção de intenção",
             example: "RAG_QUERY",
           },
           protocolNumber: {

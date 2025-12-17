@@ -1,14 +1,14 @@
 # 🤖 Assistente Jurídico Inteligente
 
-Projeto Full Stack TypeScript para um Assistente Jurídico Inteligente com RAG (Retrieval-Augmented Generation), utilizando banco vetorial Qdrant para busca semântica em documentos jurídicos.
+Assistente jurídico com IA que utiliza RAG (Retrieval-Augmented Generation) para responder perguntas baseadas em documentos jurídicos indexados. Inclui integração com portal e-SAJ para busca e resumo de processos judiciais.
 
 ## 📋 Pré-requisitos
 
-- **Node.js** 18+ e npm
-- **Docker** e Docker Compose (para PostgreSQL e Qdrant)
-- **API Key** do LLM (OpenRouter recomendado - gratuito) ou OpenAI
+- **Docker** e **Docker Compose** (recomendado para rodar tudo)
+- **Node.js** 18+ e npm (opcional, apenas para desenvolvimento local)
+- **API Key** do LLM (OpenRouter gratuito ou OpenAI)
 
-## 🚀 Instalação e Configuração
+## 🚀 Instalação Rápida com Docker
 
 ### 1. Clonar o Repositório
 
@@ -17,110 +17,62 @@ git clone <url-do-repositorio>
 cd asistente-juridico
 ```
 
-### 2. Configurar Backend
+### 2. Configurar Variáveis de Ambiente
+
+Crie o arquivo `backend/.env` baseado no exemplo:
 
 ```bash
-cd backend
+# Windows PowerShell
+Copy-Item backend/env.example backend/.env
 
-# Copiar arquivo de exemplo de variáveis de ambiente
-# Windows PowerShell:
-Copy-Item env.example.txt .env
-
-# Linux/Mac:
-# cp env.example.txt .env
+# Linux/Mac
+cp backend/env.example backend/.env
 ```
 
-### 3. Configurar Variáveis de Ambiente
+Edite `backend/.env` e configure as variáveis obrigatórias (veja seção [Configuração](#-configuração-de-variáveis-de-ambiente) abaixo).
 
-Edite o arquivo `backend/.env` e configure:
+### 3. Rodar com Docker Compose
 
-#### **Configuração Básica (Obrigatória)**
+```bash
+# Subir todos os serviços (PostgreSQL, Qdrant, Backend, Frontend)
+docker-compose up -d
 
-```env
-# Database - Para desenvolvimento local
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/assistente-db?schema=public"
+# Ver logs
+docker-compose logs -f
 
-# Server
-PORT=3000
-NODE_ENV=development
+# Parar todos os serviços
+docker-compose down
 ```
 
-#### **Configuração de LLM (Obrigatória para Chat e Embeddings)**
+A aplicação estará disponível em:
 
-**Opção 1: OpenRouter (Recomendado - Gratuito)**
+- **Frontend:** http://localhost
+- **Backend API:** http://localhost:3000
+- **Swagger Docs:** http://localhost:3000/api-docs
+- **Qdrant Dashboard:** http://localhost:6333/dashboard
 
-```env
-LLM_PROVIDER="openrouter"
-OPENROUTER_API_KEY="sk-or-v1-sua-chave-aqui"  # Obtenha em: https://openrouter.ai/keys
-LLM_MODEL="tngtech/deepseek-r1t-chimera:free"
-```
+## 🛠️ Desenvolvimento Local (sem Docker)
 
-**Opção 2: OpenAI (Pago)**
-
-```env
-LLM_PROVIDER="openai"
-OPENAI_API_KEY="sk-sua-chave-aqui"  # Obtenha em: https://platform.openai.com/api-keys
-LLM_MODEL="gpt-3.5-turbo"
-```
-
-#### **Configuração de RAG (Obrigatória para Indexação de Documentos)**
-
-```env
-# Qdrant - Banco Vetorial
-QDRANT_URL="http://localhost:6333"
-QDRANT_COLLECTION_NAME="knowledge_base"
-
-# Embeddings
-EMBEDDING_MODEL="text-embedding-3-small"
-EMBEDDING_DIMENSION="1536"
-
-# Chunking
-CHUNK_SIZE="1000"
-CHUNK_OVERLAP="200"
-```
-
-#### **Configuração de e-SAJ (Opcional - para funcionalidades de processo)**
-
-```env
-# URL do portal e-SAJ
-ESAJ_URL="https://esaj.tjsp.jus.br/cpopg/open.do"
-
-# Puppeteer - Modo headless (true = sem interface, false = com interface)
-PUPPETEER_HEADLESS="true"
-
-# Diretório para downloads temporários
-DOWNLOADS_DIR="./downloads_esaj"
-```
-
-> 💡 **Dica:** Veja o arquivo `backend/env.example.txt` para todas as opções disponíveis.
-
-### 4. Instalar Dependências
+### 1. Instalar Dependências
 
 ```bash
 # Backend
 cd backend
 npm install
 
-# Frontend (em outro terminal)
-cd frontend
+# Frontend
+cd ../frontend
 npm install
 ```
 
-### 5. Subir Serviços com Docker
+### 2. Subir Serviços com Docker
 
 ```bash
-# Na raiz do projeto
+# Na raiz do projeto, subir apenas PostgreSQL e Qdrant
 docker-compose up -d postgres qdrant
 ```
 
-Isso iniciará:
-
-- **PostgreSQL** na porta `5432`
-- **Qdrant** nas portas `6333` (HTTP) e `6334` (gRPC)
-
-> 💡 **Nota:** O backend roda localmente (não no Docker) para facilitar desenvolvimento e hot-reload. Apenas PostgreSQL e Qdrant rodam no Docker.
-
-### 6. Configurar Banco de Dados
+### 3. Configurar Banco de Dados
 
 ```bash
 cd backend
@@ -128,7 +80,7 @@ npm run prisma:generate
 npm run prisma:migrate
 ```
 
-### 7. Iniciar Servidores
+### 4. Rodar Backend e Frontend
 
 **Terminal 1 - Backend:**
 
@@ -144,124 +96,158 @@ cd frontend
 npm run dev
 ```
 
-## 🌐 Endpoints e URLs
+URLs:
 
 - **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:3000
-- **Swagger/API Docs:** http://localhost:3000/api-docs
-- **Health Check:** http://localhost:3000/health
-- **Qdrant Dashboard:** http://localhost:6333/dashboard
+- **Backend:** http://localhost:3000
 
-## 🗄️ Banco de Dados
+## ⚙️ Configuração de Variáveis de Ambiente
 
-### PostgreSQL (Docker)
+### Variáveis Obrigatórias
 
-**Credenciais:**
+Crie `backend/.env` com:
 
-- Host: `localhost:5432`
-- Usuário: `postgres`
-- Senha: `postgres`
-- Banco: `assistente-db`
+```env
+# Database
+DATABASE_URL="postgresql://postgres:postgres@postgres:5432/assistente-db?schema=public"
+# Para desenvolvimento local: postgresql://postgres:postgres@localhost:5432/assistente-db?schema=public
 
-**Comandos úteis:**
+# Server
+PORT=3000
+NODE_ENV=development
 
-```bash
-# Acessar Prisma Studio (interface visual)
-cd backend
-npm run prisma:studio
+# LLM Provider (escolha uma opção)
+LLM_PROVIDER="openrouter"  # ou "openai"
+OPENROUTER_API_KEY="sk-or-v1-..."  # Obtenha em: https://openrouter.ai/keys
+LLM_MODEL="tngtech/deepseek-r1t-chimera:free"
 
-# Resetar banco (cuidado: apaga todos os dados)
-npm run prisma:reset
+# RAG - Banco Vetorial
+QDRANT_URL="http://qdrant:6333"  # Para Docker: http://qdrant:6333 | Local: http://localhost:6333
+QDRANT_COLLECTION_NAME="knowledge_base"
+EMBEDDING_MODEL="text-embedding-3-small"
+EMBEDDING_DIMENSION="1536"
 ```
 
-### Qdrant (Banco Vetorial)
+### Variáveis Opcionais
 
-**URL:** `http://localhost:6333`
+```env
+# Google Drive (opcional - para armazenamento na nuvem)
+GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'  # JSON como string
+GOOGLE_DRIVE_FOLDER_ID="seu-folder-id"
 
-**Verificar se está rodando:**
+# e-SAJ (opcional - para funcionalidades de processo)
+ESAJ_URL="https://esaj.tjsp.jus.br/cpopg/open.do"
+PUPPETEER_HEADLESS="true"
 
-```bash
-curl http://localhost:6333/
-# Deve retornar: {"title":"qdrant - vector search engine","version":"..."}
+# Chunking (opcional)
+CHUNK_SIZE="1000"
+CHUNK_OVERLAP="200"
 ```
 
-## 📚 Funcionalidades
+> 💡 **Dica:** Veja `backend/env.example` para todas as opções disponíveis.
 
-### ✅ Implementado
+## 📖 Principais Fluxos
 
-- **CRUD de Documentos:** Gerenciamento de metadados de documentos jurídicos
-- **Upload de Arquivos:** Suporte para PDF, TXT, MD, DOCX
-- **Visualização de Documentos:** Abertura de documentos no navegador
-- **Chat com LLM:** Interface de chat com modelos de linguagem
-- **RAG (Retrieval-Augmented Generation):** ✅ **FUNCIONANDO**
-  - ✅ Indexação vetorial de documentos (Qdrant)
-  - ✅ Chunking automático de textos (PDF, TXT, MD)
-  - ✅ Geração de embeddings (OpenAI/OpenRouter)
-  - ✅ Processamento otimizado para grandes documentos
-  - ✅ Status de indexação em tempo real (PENDENTE → INDEXADO/ERRO)
-  - ✅ **Chat com RAG:** Busca semântica e respostas contextualizadas usando LangChain.js
-  - ✅ Retorno de fontes dos documentos utilizados nas respostas
-  - ✅ **Status de Indexação:** Visualização clara do status com atualização automática em tempo real
-- **Integração e-SAJ (Portal Judicial):** ✅ **FUNCIONANDO**
-  - ✅ **Busca de Processos:** Busca processos no portal e-SAJ via web scraping (Puppeteer)
-  - ✅ **Download de Documentos:** Download direto de documentos PDF do e-SAJ com cookies de sessão
-  - ✅ **Resumo de Processo:** Extração de movimentações e geração de resumo estruturado com LLM
-  - ✅ **Resumo de Documento:** Extração de texto de PDFs e geração de resumo estruturado
-  - ✅ **Perguntas sobre Documentos:** Responde perguntas específicas sobre conteúdo de documentos
-  - ✅ **Identificação de Intenção:** Sistema inteligente que detecta intenções do usuário (RAG, Download, Resumo, Pergunta sobre Documento, Geral)
-  - ✅ **Arquitetura Modular:** Serviços e-SAJ organizados em módulos especializados
-  - ✅ **Otimizações:** Reutilização de navegador Puppeteer, evita buscas duplicadas
+### 1. Indexar Documentos na Base de Conhecimento
 
-### 🎯 Como Usar o Chat com RAG
+1. Acesse **"Gestão da Base de Conhecimento"** no menu
+2. Clique em **"Novo Documento"**
+3. Faça upload de um arquivo (PDF, TXT, MD)
+4. Aguarde o status mudar para **"Indexado"** (atualização automática)
+5. O documento estará disponível para consultas via RAG
 
-1. **Indexe documentos primeiro:**
+### 2. Chat com RAG
 
-   - Acesse a página "Gestão da Base de Conhecimento"
-   - Faça upload de documentos (PDF, TXT, MD)
-   - Aguarde o status mudar para "INDEXADO"
+1. Acesse a página de **Chat**
+2. Faça perguntas sobre os documentos indexados
+3. A IA buscará informações relevantes e responderá com base nos documentos
+4. As fontes utilizadas aparecem abaixo da resposta
 
-2. **Use o chat:**
+### 3. Buscar e Resumir Processo no e-SAJ
 
-   - Acesse a página de Chat
-   - Faça perguntas sobre os documentos indexados
-   - A IA buscará informações relevantes e responderá com base nos documentos
+1. No chat, digite: **"Resuma o processo 10008220620258260451"**
+2. O sistema irá:
+   - Buscar o processo no portal e-SAJ
+   - Extrair movimentações
+   - Gerar resumo estruturado com LLM
+3. O resumo inclui: Status, Fase, Decisões Relevantes, Partes Envolvidas
 
-3. **Verifique as fontes:**
-   - Cada resposta inclui um array `sources` com os documentos utilizados
-   - As fontes mostram título, score de similaridade e trecho usado
+### 4. Download de Documento do e-SAJ
 
-### 🚧 Em Desenvolvimento
+1. No chat, digite: **"Baixe a sentença do processo 10008220620258260451"**
+2. O sistema buscará o processo e baixará o documento solicitado
+3. O link de download aparecerá na resposta
 
-- Histórico de conversas persistente
-- Autenticação e autorização
-- Reindexação automática de documentos atualizados
+## 🏗️ Arquitetura
+
+### Stack Tecnológica
+
+**Backend:**
+
+- Node.js + TypeScript + Express
+- Prisma ORM + PostgreSQL
+- Qdrant (banco vetorial)
+- LangChain.js (RAG orchestration)
+- Puppeteer (web scraping e-SAJ)
+- OpenAI SDK (compatível com OpenRouter)
+
+**Frontend:**
+
+- React 18 + TypeScript + Vite
+- shadcn/ui + Tailwind CSS
+- React Router
+- React-Toastify
+
+### Decisões Técnicas
+
+1. **RAG com Qdrant:** Busca semântica eficiente para grandes volumes de documentos
+2. **Chunking Inteligente:** Divisão de documentos em chunks com sobreposição para manter contexto
+3. **Arquitetura Modular e-SAJ:** Serviços especializados (busca, download, extração) para facilitar manutenção
+4. **Progresso em Tempo Real:** Sistema de callbacks para feedback ao usuário durante operações longas
+5. **Containerização:** Docker Compose para facilitar deploy e desenvolvimento
+
+### Estrutura de Pastas
+
+```
+asistente-juridico/
+├── backend/
+│   ├── src/
+│   │   ├── controllers/     # Controladores HTTP
+│   │   ├── services/         # Lógica de negócio
+│   │   │   └── esaj/         # Módulos e-SAJ especializados
+│   │   ├── repositories/     # Acesso a dados
+│   │   ├── routes/          # Rotas da API
+│   │   └── lib/             # Bibliotecas (Qdrant, LangChain)
+│   ├── prisma/              # Schema e migrações
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # Componentes React
+│   │   ├── pages/           # Páginas
+│   │   └── services/        # Cliente API
+│   └── Dockerfile
+└── docker-compose.yml       # Orquestração de serviços
+```
 
 ## 🔧 Comandos Úteis
 
 ### Docker
 
-> 💡 **Nota:** Apenas PostgreSQL e Qdrant rodam no Docker. Backend e Frontend rodam localmente.
-
 ```bash
-# Subir PostgreSQL e Qdrant (serviços necessários)
+# Subir todos os serviços
+docker-compose up -d
+
+# Subir apenas serviços de infra (PostgreSQL + Qdrant)
 docker-compose up -d postgres qdrant
+
+# Ver logs
+docker-compose logs -f [serviço]
 
 # Parar serviços
 docker-compose down
 
-# Ver logs
-docker-compose logs -f
-
-# Ver logs de um serviço específico
-docker-compose logs -f qdrant
-docker-compose logs -f postgres
-
-# Parar e remover volumes (apaga dados - cuidado!)
-docker-compose down -v
-
-# Reiniciar um serviço específico
-docker-compose restart qdrant
-docker-compose restart postgres
+# Rebuild e subir
+docker-compose up -d --build
 ```
 
 ### Prisma
@@ -272,29 +258,24 @@ cd backend
 # Gerar cliente Prisma
 npm run prisma:generate
 
-# Criar nova migração
+# Criar migração
 npm run prisma:migrate
 
 # Aplicar migrações (produção)
 npm run prisma:migrate:deploy
 
-# Abrir Prisma Studio
+# Prisma Studio (interface visual)
 npm run prisma:studio
-
-# Resetar banco (desenvolvimento)
-npm run prisma:reset
 ```
 
 ### Desenvolvimento
 
 ```bash
 # Backend com hot-reload
-cd backend
-npm run dev
+cd backend && npm run dev
 
 # Frontend com hot-reload
-cd frontend
-npm run dev
+cd frontend && npm run dev
 
 # Build de produção
 cd backend && npm run build
@@ -303,207 +284,43 @@ cd frontend && npm run build
 
 ## 🐛 Troubleshooting
 
-### Problema: Porta 3000 já está em uso
-
-**Windows PowerShell:**
-
-```powershell
-Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object {
-    $processId = $_.OwningProcess
-    Stop-Process -Id $processId -Force
-    Write-Host "Processo $processId encerrado"
-}
-```
-
-**Linux/Mac:**
+### Porta já em uso
 
 ```bash
+# Parar containers Docker
+docker-compose down
+
+# Ou matar processo na porta (Linux/Mac)
 lsof -ti:3000 | xargs kill -9
 ```
 
-**Ou parar container Docker (se estiver rodando):**
+### Qdrant não conecta
 
-```bash
-docker stop assistente-backend
-docker-compose down
-```
+Verifique `QDRANT_URL` no `.env`:
 
-> 💡 **Dica:** Se você estiver usando Docker para o backend, pare o container antes de rodar localmente: `docker-compose down`
+- **Docker:** `http://qdrant:6333`
+- **Local:** `http://localhost:6333`
 
-### Problema: Qdrant não conecta
+### Erro de API Key
 
-1. Verificar se o container está rodando:
+- **OpenRouter:** Chave deve começar com `sk-or-v1-`
+- **OpenAI:** Chave deve começar com `sk-`
+- Verifique se não há espaços extras
 
-   ```bash
-   docker ps --filter name=assistente-qdrant
-   ```
+### Chat não usa RAG
 
-2. Verificar URL no `.env`:
+1. Verifique se há documentos indexados (status "Indexado")
+2. Verifique se Qdrant está rodando: `docker ps --filter name=qdrant`
+3. Verifique logs do backend para mensagens de erro
 
-   - **Local:** `QDRANT_URL=http://localhost:6333`
-   - **Docker:** `QDRANT_URL=http://qdrant:6333`
+## 📚 Documentação Adicional
 
-3. Reiniciar Qdrant:
-   ```bash
-   docker-compose restart qdrant
-   ```
-
-### Problema: Erro de API Key do LLM
-
-- **OpenRouter:** Verifique se a chave começa com `sk-or-v1-`
-- **OpenAI:** Verifique se a chave começa com `sk-`
-- Certifique-se de que não há espaços extras na chave
-- Verifique se a variável está no arquivo `backend/.env` (não na raiz)
-
-### Problema: Erro de memória ao processar documentos
-
-O sistema já está otimizado com:
-
-- Processamento em lotes (20 chunks por vez)
-- Limite de 1000 chunks por documento
-- Limite de 30MB por arquivo PDF
-- Garbage collection automático
-
-Se ainda ocorrer, aumente a memória do Node.js:
-
-```bash
-# No backend/package.json, o script dev já inclui:
-NODE_OPTIONS=--max-old-space-size=8192
-```
-
-### Problema: Chat não usa RAG (responde sem contexto dos documentos)
-
-1. **Verifique se há documentos indexados:**
-
-   ```bash
-   curl http://localhost:6333/collections/knowledge_base | jq '.result.points_count'
-   # Deve retornar um número > 0
-   ```
-
-2. **Verifique se Qdrant está rodando:**
-
-   ```bash
-   docker ps --filter name=assistente-qdrant
-   ```
-
-3. **Verifique logs do backend:**
-
-   - Deve aparecer: `✅ RAG Chain Service inicializado com sucesso`
-   - Se aparecer: `⚠️ Chat funcionará sem RAG`, verifique `QDRANT_URL` no `.env`
-
-4. **Teste a resposta da API:**
-   - Se `sources` estiver presente na resposta, o RAG está funcionando
-   - Se `sources` for `undefined`, o sistema está usando LLM direto (fallback)
-
-### Problema: Banco de dados não conecta
-
-1. Verificar se PostgreSQL está rodando:
-
-   ```bash
-   docker ps --filter name=assistente-postgres
-   ```
-
-2. Verificar `DATABASE_URL` no `.env`:
-
-   - **Docker:** `postgresql://postgres:postgres@postgres:5432/...`
-   - **Local:** `postgresql://postgres:postgres@localhost:5432/...`
-
-3. Recriar banco:
-   ```bash
-   docker-compose down -v
-   docker-compose up -d postgres
-   cd backend && npm run prisma:migrate
-   ```
-
-## 📖 Documentação Adicional
-
-- **Etapa 6 - RAG e Banco Vetorial:** [`DOCUMENTACAO_ETAPA_6_RAG.md`](./DOCUMENTACAO_ETAPA_6_RAG.md) - Documentação completa da implementação RAG
-- **Etapa 7 - Chat com RAG:** [`DOCUMENTACAO_ETAPA_7_RAG_CHAT.md`](./DOCUMENTACAO_ETAPA_7_RAG_CHAT.md) - Documentação da integração RAG no chat usando LangChain.js
-- **Etapa 8 - Status de Indexação:** [`DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md`](./DOCUMENTACAO_ETAPA_8_STATUS_INDEXACAO.md) - Documentação da visualização e atualização automática do status de indexação
-- **Etapa 9 - e-SAJ e Identificação de Intenção:** [`DOCUMENTACAO_ETAPA_9_ESAJ_INTENT.md`](./DOCUMENTACAO_ETAPA_9_ESAJ_INTENT.md) - Documentação da integração com e-SAJ e sistema de identificação de intenção
-- **Etapa 10 - Download de Documentos do e-SAJ:** [`DOCUMENTACAO_ETAPA_10_ESAJ_DOWNLOAD.md`](./DOCUMENTACAO_ETAPA_10_ESAJ_DOWNLOAD.md) - Documentação completa do download de documentos do e-SAJ, incluindo listagem, download direto com cookies, tratamento de erros e integração com chat
-- **Etapa 11 - Resumo de Processo Judicial:** [`DOCUMENTACAO_ETAPA_11_RESUMO_PROCESSO.md`](./DOCUMENTACAO_ETAPA_11_RESUMO_PROCESSO.md) - Documentação completa da funcionalidade de resumo de processo judicial (US-RESUMO-01), incluindo resumo de processo completo e resumo de documentos específicos
-- **Guia de Testes Etapa 11:** [`GUIA_TESTES_ETAPA_11_RESUMO.md`](./GUIA_TESTES_ETAPA_11_RESUMO.md) - Guia completo de testes para a funcionalidade de resumo de processo judicial
-- **Serviços e-SAJ - Arquitetura Modular:** [`DOCUMENTACAO_ESAJ_SERVICES.md`](./DOCUMENTACAO_ESAJ_SERVICES.md) - Documentação completa da arquitetura modular dos serviços e-SAJ, incluindo todos os módulos, fluxos de execução e otimizações
-- **Swagger/API Docs:** http://localhost:3000/api-docs - Documentação interativa da API
-
-## 🛠️ Tecnologias
-
-### Backend
-
-- **Runtime:** Node.js 18+
-- **Linguagem:** TypeScript
-- **Framework:** Express.js
-- **ORM:** Prisma 7
-- **Banco de Dados:** PostgreSQL 15
-- **Banco Vetorial:** Qdrant
-- **LLM:** OpenAI SDK (compatível com OpenRouter)
-- **RAG Orchestration:** LangChain.js
-- **Upload:** Multer
-- **PDF:** pdf-parse
-- **Documentação:** Swagger/OpenAPI
-
-### Frontend
-
-- **Framework:** React 18
-- **Linguagem:** TypeScript
-- **Build Tool:** Vite
-- **Roteamento:** React Router
-- **HTTP Client:** Axios
-- **UI Components:** shadcn/ui (Radix UI + Tailwind CSS)
-- **Ícones:** Lucide React
-- **Polling:** Atualização automática de status de indexação
-
-### Web Scraping e Automação
-
-- **Puppeteer:** Automação de navegador para web scraping do e-SAJ
-- **Axios:** Requisições HTTP para download de arquivos com cookies
-
-### DevOps
-
-- **Containerização:** Docker & Docker Compose
-- **Versionamento:** Git
-
-## 📝 Estrutura do Projeto
-
-```
-asistente-juridico/
-├── backend/
-│   ├── src/
-│   │   ├── controllers/     # Controladores HTTP
-│   │   ├── services/        # Lógica de negócio
-│   │   ├── repositories/    # Acesso a dados
-│   │   ├── routes/          # Rotas da API
-│   │   ├── lib/             # Bibliotecas (Prisma, Qdrant, LangChain adapters)
-│   │   ├── middleware/      # Middlewares (upload, etc.)
-│   │   └── server.ts        # Servidor Express
-│   ├── prisma/
-│   │   └── schema.prisma    # Schema do banco
-│   ├── .env                 # Variáveis de ambiente
-│   └── package.json
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # Componentes React
-│   │   ├── pages/           # Páginas
-│   │   ├── services/        # Serviços API
-│   │   └── App.tsx          # App principal
-│   └── package.json
-├── docker-compose.yml       # Configuração Docker
-└── README.md
-```
-
-## 🤝 Contribuindo
-
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
+- **Swagger/API Docs:** http://localhost:3000/api-docs
+- **Qdrant Dashboard:** http://localhost:6333/dashboard
+- **Prisma Studio:** `npm run prisma:studio` (porta 5555)
 
 ## 📄 Licença
 
-Este projeto está sob a licença ISC.
+ISC
 
 ---
-
-**Desenvolvido com ❤️ para auxiliar profissionais do direito**
