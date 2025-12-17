@@ -163,6 +163,37 @@ async function startServer() {
           );
         `);
 
+        // Adicionar colunas do Google Drive se não existirem
+        try {
+          await prisma.$executeRawUnsafe(`
+            DO $$ 
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'base_de_conhecimento' 
+                AND column_name = 'google_drive_file_id'
+              ) THEN
+                ALTER TABLE "base_de_conhecimento" ADD COLUMN "google_drive_file_id" TEXT;
+              END IF;
+              
+              IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'base_de_conhecimento' 
+                AND column_name = 'google_drive_view_link'
+              ) THEN
+                ALTER TABLE "base_de_conhecimento" ADD COLUMN "google_drive_view_link" TEXT;
+              END IF;
+            END $$;
+          `);
+          console.log("✅ Colunas do Google Drive verificadas/criadas");
+        } catch (columnError: any) {
+          console.warn(
+            "⚠️  Erro ao verificar/criar colunas do Google Drive:",
+            columnError.message
+          );
+          // Não falhar o servidor se houver erro ao criar colunas
+        }
+
         // Criar tabela de migrations do Prisma se não existir (para evitar problemas futuros)
         await prisma.$executeRawUnsafe(`
           CREATE TABLE IF NOT EXISTS "_prisma_migrations" (

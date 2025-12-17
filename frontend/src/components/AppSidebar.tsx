@@ -200,7 +200,7 @@ export function AppSidebar({ onChatSelect, onNewChat }: AppSidebarProps) {
                               tooltip={session.title}
                             >
                               <MessageSquare />
-                              <span>{session.title}</span>
+                              <span className="max-w-40">{session.title}</span>
                             </SidebarMenuButton>
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover/menu-item:opacity-100 md:transition-opacity">
                               <button

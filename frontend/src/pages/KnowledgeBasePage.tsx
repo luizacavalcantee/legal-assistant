@@ -150,7 +150,7 @@ export function KnowledgeBasePage() {
               Gestão da Base de Conhecimento
             </h1>
             <p className="text-muted-foreground mt-1">
-              Gerencie os metadados dos documentos cadastrados
+              Gerencie os documentos cadastrados que servirão de base de conhecimento para o chatbot.
             </p>
           </div>
           <div className="flex gap-2">

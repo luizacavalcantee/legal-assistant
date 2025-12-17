@@ -168,11 +168,35 @@ export class GoogleDriveService {
         webContentLink: response.data.webContentLink || "",
       };
     } catch (error: any) {
+      // Verificar se é erro de quota de Service Account
+      if (
+        error.code === 403 &&
+        (error.message?.includes("storage quota") ||
+          error.message?.includes(
+            "Service Accounts do not have storage quota"
+          ) ||
+          error.response?.data?.error?.message?.includes("storage quota"))
+      ) {
+        console.error(
+          "❌ Erro: Service Account não tem quota de armazenamento no Google Drive."
+        );
+        console.error(
+          "   Solução: Use Shared Drives (Google Workspace) ou OAuth delegation."
+        );
+        console.error(
+          "   Documentação: https://developers.google.com/workspace/drive/api/guides/about-shareddrives"
+        );
+        // Não lançar erro, retornar null para usar fallback local
+        return null;
+      }
+
       console.error(
         "❌ Erro ao fazer upload para Google Drive:",
         error.message
       );
-      throw error;
+      // Para outros erros, também retornar null em vez de lançar
+      // Isso permite que o sistema continue com armazenamento local
+      return null;
     }
   }
 
@@ -232,11 +256,31 @@ export class GoogleDriveService {
         webContentLink: response.data.webContentLink || "",
       };
     } catch (error: any) {
+      // Verificar se é erro de quota de Service Account
+      if (
+        error.code === 403 &&
+        (error.message?.includes("storage quota") ||
+          error.message?.includes(
+            "Service Accounts do not have storage quota"
+          ) ||
+          error.response?.data?.error?.message?.includes("storage quota"))
+      ) {
+        console.error(
+          "❌ Erro: Service Account não tem quota de armazenamento no Google Drive."
+        );
+        console.error(
+          "   Solução: Use Shared Drives (Google Workspace) ou OAuth delegation."
+        );
+        // Não lançar erro, retornar null para usar fallback local
+        return null;
+      }
+
       console.error(
         "❌ Erro ao fazer upload para Google Drive:",
         error.message
       );
-      throw error;
+      // Para outros erros, também retornar null em vez de lançar
+      return null;
     }
   }
 
