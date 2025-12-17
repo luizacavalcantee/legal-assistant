@@ -909,15 +909,19 @@ export class ChatController {
 
                   // Construir URL de download
                   const host = req.get("host") || "";
-                  const protocol = req.protocol === "https" || 
-                    req.get("x-forwarded-proto") === "https" || 
-                    process.env.FORCE_HTTPS === "true" 
-                    ? "https" 
-                    : req.protocol;
+                  const protocol =
+                    req.protocol === "https" ||
+                    req.get("x-forwarded-proto") === "https" ||
+                    process.env.FORCE_HTTPS === "true"
+                      ? "https"
+                      : req.protocol;
                   const baseUrl = `${protocol}://${host}`;
-                  
-                  downloadUrlResponse = googleDriveViewLink || 
-                    `${baseUrl}/chat/download/${encodeURIComponent(downloadResult.fileName)}`;
+
+                  downloadUrlResponse =
+                    googleDriveViewLink ||
+                    `${baseUrl}/chat/download/${encodeURIComponent(
+                      downloadResult.fileName
+                    )}`;
                   fileNameResponse = downloadResult.fileName;
 
                   response =
