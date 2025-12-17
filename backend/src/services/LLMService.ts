@@ -166,7 +166,8 @@ Gere o resumo agora seguindo exatamente o formato especificado, focando apenas e
         throw new Error("Resposta vazia do LLM ao gerar resumo");
       }
 
-      return summary.trim();
+      // Remover markdown (**, __, etc.) para exibição limpa
+      return this.removeMarkdown(summary.trim());
     } catch (error: any) {
       console.error("Erro ao gerar resumo do processo:", error);
 
@@ -279,7 +280,8 @@ Gere o resumo agora seguindo exatamente o formato especificado:`;
         throw new Error("Resposta vazia do LLM ao gerar resumo do documento");
       }
 
-      return summary.trim();
+      // Remover markdown (**, __, etc.) para exibição limpa
+      return this.removeMarkdown(summary.trim());
     } catch (error: any) {
       console.error("Erro ao gerar resumo do documento:", error);
 
@@ -394,7 +396,8 @@ ${documentText}
         );
       }
 
-      return answer.trim();
+      // Remover markdown (**, __, etc.) para exibição limpa
+      return this.removeMarkdown(answer.trim());
     } catch (error: any) {
       console.error("Erro ao responder pergunta sobre documento:", error);
 
@@ -578,5 +581,33 @@ ${documentText}
         `Erro ao comunicar com o modelo de linguagem: ${error.message}`
       );
     }
+  }
+
+  /**
+   * Remove formatação markdown do texto (**, __, etc.)
+   * @param text - Texto com markdown
+   * @returns Texto sem formatação markdown
+   */
+  private removeMarkdown(text: string): string {
+    if (!text) return text;
+
+    // Remover markdown de negrito (**texto** ou __texto__)
+    let cleaned = text.replace(/\*\*([^*]+)\*\*/g, "$1");
+    cleaned = cleaned.replace(/__([^_]+)__/g, "$1");
+    
+    // Remover markdown de itálico (*texto* ou _texto_)
+    cleaned = cleaned.replace(/\*([^*]+)\*/g, "$1");
+    cleaned = cleaned.replace(/_([^_]+)_/g, "$1");
+    
+    // Remover markdown de código (`código`)
+    cleaned = cleaned.replace(/`([^`]+)`/g, "$1");
+    
+    // Remover markdown de links [texto](url)
+    cleaned = cleaned.replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1");
+    
+    // Limpar espaços múltiplos que possam ter sido criados
+    cleaned = cleaned.replace(/\s+/g, " ");
+    
+    return cleaned.trim();
   }
 }

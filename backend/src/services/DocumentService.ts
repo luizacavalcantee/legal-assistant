@@ -34,27 +34,43 @@ export class DocumentService {
     });
 
     // Indexar documento de forma assíncrona (não bloqueia a resposta)
-    if (this.indexingService && filePath) {
-      console.log(`🚀 Iniciando indexação assíncrona do documento ${document.id}...`);
-      this.indexingService
-        .indexDocument(document.id, filePath, data.titulo)
-        .then(() => {
-          console.log(`✅ Indexação concluída para documento ${document.id}`);
-        })
-        .catch((error) => {
-          console.error(
-            `❌ Erro ao indexar documento ${document.id} em background:`,
-            error.message
-          );
-          console.error("   Stack:", error.stack);
-        });
+    // Aguardar um pouco para garantir que o IndexingService esteja inicializado
+    if (filePath) {
+      // Função para tentar indexar (pode ser chamada imediatamente ou após delay)
+      const tryIndexDocument = async (retryCount = 0) => {
+        if (this.indexingService) {
+          try {
+            console.log(`🚀 Iniciando indexação assíncrona do documento ${document.id}...`);
+            await this.indexingService.indexDocument(document.id, filePath, data.titulo);
+            console.log(`✅ Indexação concluída para documento ${document.id}`);
+          } catch (error: any) {
+            console.error(
+              `❌ Erro ao indexar documento ${document.id} em background:`,
+              error.message
+            );
+            console.error("   Stack:", error.stack);
+          }
+        } else {
+          // Se não estiver disponível e ainda não tentou muitas vezes, tentar novamente após delay
+          if (retryCount < 5) {
+            console.log(`⏳ IndexingService ainda não disponível. Tentando novamente em 2 segundos... (tentativa ${retryCount + 1}/5)`);
+            setTimeout(() => tryIndexDocument(retryCount + 1), 2000);
+          } else {
+            console.warn(`⚠️  IndexingService não disponível após ${retryCount} tentativas. Documento ${document.id} não será indexado.`);
+            console.warn(`   Isso pode acontecer se o Qdrant não estiver configurado ou ainda estiver inicializando.`);
+          }
+        }
+      };
+
+      // Tentar indexar imediatamente ou após um pequeno delay
+      if (this.indexingService) {
+        tryIndexDocument();
+      } else {
+        // Aguardar 1 segundo antes da primeira tentativa para dar tempo ao IndexingService inicializar
+        setTimeout(() => tryIndexDocument(), 1000);
+      }
     } else {
-      if (!this.indexingService) {
-        console.warn(`⚠️  IndexingService não disponível. Documento ${document.id} não será indexado.`);
-      }
-      if (!filePath) {
-        console.warn(`⚠️  Caminho do arquivo não fornecido. Documento ${document.id} não será indexado.`);
-      }
+      console.warn(`⚠️  Caminho do arquivo não fornecido. Documento ${document.id} não será indexado.`);
     }
 
     return this.mapToResponse(document);

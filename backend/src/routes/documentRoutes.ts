@@ -51,6 +51,14 @@ async function initializeRAGServices(): Promise<void> {
         repository
       );
       console.log("✅ Serviços de RAG inicializados com sucesso");
+      console.log(`   IndexingService disponível: ${indexingService ? 'SIM' : 'NÃO'}`);
+      
+      // Atualizar o DocumentService para garantir que o getter funcione
+      // Usar o setter do Object.defineProperty para atualizar
+      if (service) {
+        (service as any).indexingService = indexingService;
+        console.log("✅ DocumentService atualizado com IndexingService");
+      }
     } catch (initError: any) {
       console.error("❌ Erro ao inicializar Qdrant:", initError.message);
       console.error("   Detalhes:", initError);

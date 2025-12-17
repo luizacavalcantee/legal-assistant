@@ -326,7 +326,7 @@ export class ChatController {
                       textResult.documentType,
                       protocolNumber
                     );
-                    response = `📄 **Resposta sobre o documento${textResult.documentType ? ` (${textResult.documentType})` : ""} do processo ${protocolNumber}**\n\n${answer}`;
+                    response = `📄 Resposta sobre o documento${textResult.documentType ? ` (${textResult.documentType})` : ""} do processo ${protocolNumber}\n\n${answer}`;
                   } catch (answerError: any) {
                     console.error(
                       `❌ Erro ao responder pergunta:`,
@@ -360,7 +360,7 @@ export class ChatController {
                       textResult.documentType || intentResult.documentType,
                       protocolNumber
                     );
-                    response = `📄 **Resumo do Documento${textResult.documentType ? ` (${textResult.documentType})` : ""} do Processo ${protocolNumber}**\n\n${summary}`;
+                    response = `📄 Resumo do Documento${textResult.documentType ? ` (${textResult.documentType})` : ""} do Processo ${protocolNumber}\n\n${summary}`;
                   } catch (summaryError: any) {
                     console.error(
                       `❌ Erro ao gerar resumo do documento:`,
@@ -394,7 +394,7 @@ export class ChatController {
                       const summary = await this.llmService.summarizeProcess(
                         movementsText
                       );
-                      response = `📋 **Resumo do Processo ${protocolNumber}**\n\n${summary}`;
+                      response = `📋 Resumo do Processo ${protocolNumber}\n\n${summary}`;
                     } catch (summaryError: any) {
                       console.error(
                         `❌ Erro ao gerar resumo:`,
