@@ -23,3 +23,7 @@ documents/
 *.pdf
 *.docx
 
+# Google Drive credentials
+service-account-key.json
+*-service-account*.json
+
