@@ -290,12 +290,12 @@ export class eSAJBase {
           );
         }
 
-        this.browser = await puppeteer.launch({
+        const launchOptions: any = {
           headless: this.headless,
           args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage", // Importante para ambientes com pouca memória
+            "--disable-dev-shm-usage",
             "--disable-accelerated-2d-canvas",
             "--disable-gpu",
             "--disable-web-security",
@@ -310,33 +310,60 @@ export class eSAJBase {
             "--mute-audio",
             "--no-first-run",
             "--safebrowsing-disable-auto-update",
-            "--disable-blink-features=AutomationControlled", // Evita detecção de bot
-            "--single-process", // Usar apenas um processo (menos memória, mas pode ser mais lento)
+            "--disable-blink-features=AutomationControlled",
           ],
-          executablePath: executablePath || undefined,
-          // Otimizações adicionais
-          ignoreHTTPSErrors: true,
           defaultViewport: {
             width: 1280,
             height: 720,
           },
-        });
+          timeout: 60000, // 60 segundos para inicialização
+          protocolTimeout: 60000,
+        };
+
+        // Adicionar executablePath apenas se definido
+        if (executablePath) {
+          launchOptions.executablePath = executablePath;
+        }
+
+        this.browser = await puppeteer.launch(launchOptions);
 
         // Handler para desconexão inesperada
         this.browser.on("disconnected", () => {
           console.log("⚠️  Navegador desconectado. Reinicializando...");
           this.browser = null;
         });
+
+        console.log("✅ Navegador Puppeteer inicializado com sucesso");
       } catch (error: any) {
         console.error("❌ Erro ao inicializar Puppeteer:", error.message);
-        console.error("   Puppeteer requer Chrome instalado no sistema.");
-        console.error(
-          "   No Render, você precisa configurar Chrome separadamente."
-        );
-        console.error("   Funcionalidades do e-SAJ não estarão disponíveis.");
+        console.error("   Stack:", error.stack);
+        
+        // Mensagens de diagnóstico detalhadas
+        const errorMsg = error.message || "";
+        let detailedError = "Erro ao inicializar o navegador Chrome. ";
+        
+        if (errorMsg.includes("Target closed") || errorMsg.includes("Protocol error")) {
+          detailedError += "O navegador foi fechado inesperadamente durante a inicialização. " +
+            "Isso pode ocorrer por falta de memória ou recursos do sistema.";
+        } else if (errorMsg.includes("Failed to launch") || errorMsg.includes("Could not find")) {
+          detailedError += "Chrome/Chromium não foi encontrado no sistema.";
+        } else {
+          detailedError += errorMsg;
+        }
+        
+        console.error(`\n⚠️  DIAGNÓSTICO:`);
+        console.error(`   ${detailedError}`);
+        console.error(`\n💡 SOLUÇÕES:`);
+        console.error(`   1. Em ambiente Windows: Instale o Google Chrome`);
+        console.error(`   2. Em ambiente Linux/Docker: Instale chromium`);
+        console.error(`      apt-get install -y chromium-browser`);
+        console.error(`   3. No Render.com: Adicione buildpack do Chrome`);
+        console.error(`      https://github.com/heroku/heroku-buildpack-google-chrome`);
+        console.error(`   4. Defina PUPPETEER_EXECUTABLE_PATH no .env`);
+        console.error(`   5. Aumente a memória disponível para o processo\n`);
+        
         throw new Error(
-          `Puppeteer não pode ser inicializado: ${error.message}. ` +
-            `Funcionalidades do e-SAJ requerem Chrome instalado no sistema.`
+          `Não foi possível inicializar o navegador para acessar o e-SAJ. ${detailedError}`
         );
       }
     }
@@ -344,13 +371,39 @@ export class eSAJBase {
   }
 
   /**
+   * Fecha uma página específica com tratamento de erro
+   */
+  async closePage(page: Page | null): Promise<void> {
+    if (page && !page.isClosed()) {
+      try {
+        await page.close();
+      } catch (error: any) {
+        console.warn(`⚠️  Erro ao fechar página: ${error.message}`);
+      }
+    }
+  }
+
+  /**
    * Fecha o navegador
    */
   async closeBrowser(): Promise<void> {
     if (this.browser) {
-      const pages = await this.browser.pages();
-      // Fechar todas as páginas antes de fechar o navegador
-      await Promise.all(pages.map((page) => page.close()));
+      try {
+        const pages = await this.browser.pages();
+        console.log(`🔍 Fechando ${pages.length} página(s) abertas...`);
+        
+        // Fechar todas as páginas antes de fechar o navegador
+        await Promise.all(
+          pages.map(async (page) => {
+            try {
+              if (!page.isClosed()) {
+                await page.close();
+              }
+            } catch (error) {
+              // Ignorar erros ao fechar páginas individuais
+            }
+          })
+        );
       await this.browser.close();
       this.browser = null;
     }

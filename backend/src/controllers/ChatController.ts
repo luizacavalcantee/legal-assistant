@@ -328,7 +328,7 @@ export class ChatController {
                       }
 
                       const baseUrl = `${protocol}://${host}`;
-                      downloadUrl = `${baseUrl}/download/file/${encodeURIComponent(
+                      downloadUrl = `${baseUrl}/chat/download/${encodeURIComponent(
                         downloadResult.fileName
                       )}`;
 
@@ -338,8 +338,7 @@ export class ChatController {
 
                       response =
                         `✅ Documento baixado com sucesso!\n\n` +
-                        `📄 Clique no link abaixo para baixar o documento:\n` +
-                        `${downloadUrl}\n\n` +
+                        `📄 [Clique aqui para baixar o documento](${downloadUrl})\n\n` +
                         `📋 Nome do arquivo: ${downloadResult.fileName}`;
                     }
 
@@ -908,9 +907,17 @@ export class ChatController {
                     }
                   }
 
-                  downloadUrlResponse = `/api/chat/download/${encodeURIComponent(
-                    downloadResult.fileName
-                  )}`;
+                  // Construir URL de download
+                  const host = req.get("host") || "";
+                  const protocol = req.protocol === "https" || 
+                    req.get("x-forwarded-proto") === "https" || 
+                    process.env.FORCE_HTTPS === "true" 
+                    ? "https" 
+                    : req.protocol;
+                  const baseUrl = `${protocol}://${host}`;
+                  
+                  downloadUrlResponse = googleDriveViewLink || 
+                    `${baseUrl}/chat/download/${encodeURIComponent(downloadResult.fileName)}`;
                   fileNameResponse = downloadResult.fileName;
 
                   response =
@@ -919,8 +926,7 @@ export class ChatController {
                     `📄 Tipo: ${downloadResult.documentType}\n` +
                     (googleDriveViewLink
                       ? `\n🔗 Link do Google Drive: ${googleDriveViewLink}\n`
-                      : "") +
-                    `\n[Clique aqui para baixar](${downloadUrlResponse})`;
+                      : `\n[📥 Clique aqui para baixar](${downloadUrlResponse})`);
                 } else {
                   response =
                     downloadResult.error ||
