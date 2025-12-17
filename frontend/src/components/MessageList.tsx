@@ -112,7 +112,9 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                   <ReactMarkdown
                     components={{
                       p: ({ children }: { children?: React.ReactNode }) => (
-                        <p className="mb-2 last:mb-0">{children}</p>
+                        <p className="mb-3 last:mb-0 leading-relaxed">
+                          {children}
+                        </p>
                       ),
                       strong: ({
                         children,
@@ -125,27 +127,34 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                         <em className="italic">{children}</em>
                       ),
                       ul: ({ children }: { children?: React.ReactNode }) => (
-                        <ul className="list-disc list-inside mb-2 space-y-1">
+                        <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2">
                           {children}
                         </ul>
                       ),
                       ol: ({ children }: { children?: React.ReactNode }) => (
-                        <ol className="list-decimal list-inside mb-2 space-y-1">
+                        <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2">
                           {children}
                         </ol>
                       ),
                       li: ({ children }: { children?: React.ReactNode }) => (
-                        <li className="ml-2">{children}</li>
+                        <li className="ml-1">{children}</li>
                       ),
                       h1: ({ children }: { children?: React.ReactNode }) => (
-                        <h1 className="text-lg font-bold mb-2">{children}</h1>
+                        <h1 className="text-lg font-bold mb-3 mt-4 first:mt-0">
+                          {children}
+                        </h1>
                       ),
                       h2: ({ children }: { children?: React.ReactNode }) => (
-                        <h2 className="text-base font-bold mb-2">{children}</h2>
+                        <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">
+                          {children}
+                        </h2>
                       ),
                       h3: ({ children }: { children?: React.ReactNode }) => (
-                        <h3 className="text-sm font-bold mb-1">{children}</h3>
+                        <h3 className="text-sm font-bold mb-1.5 mt-2 first:mt-0">
+                          {children}
+                        </h3>
                       ),
+                      br: () => <br />,
                     }}
                   >
                     {message.content}

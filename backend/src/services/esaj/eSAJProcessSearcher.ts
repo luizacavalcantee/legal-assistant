@@ -228,7 +228,7 @@ export class eSAJProcessSearcher extends eSAJBase {
         };
       }
 
-      // Aguardar o carregamento da página de resultados
+      // Aguardar o carregamento da página de resultados (otimizado)
       await this.emitProgress({
         stage: "searching",
         message: "Processando resultado da busca...",
@@ -236,12 +236,22 @@ export class eSAJProcessSearcher extends eSAJBase {
         details: "Verificando se o processo foi encontrado",
       });
 
-      await this.wait(1500); // Reduzido de 3s para 1.5s
-      await page
-        .waitForNavigation({ waitUntil: "networkidle2", timeout: 45000 })
-        .catch(() => {
-          // Ignorar erro de timeout - a página pode já ter carregado
+      // Aguardar apenas o essencial - não esperar networkidle2 que pode demorar muito
+      // Esperar apenas que a página tenha conteúdo básico
+      await this.wait(800); // Reduzido de 1.5s para 800ms
+      
+      // Tentar aguardar um seletor específico que indica que a página carregou
+      try {
+        // Aguardar por elementos típicos de uma página de processo (timeout curto)
+        await Promise.race([
+          page.waitForSelector('table, .processo, .dados-processo, [class*="processo"], [id*="processo"]', { timeout: 5000 }),
+          page.waitForSelector('body', { timeout: 2000 }), // Fallback: apenas body
+        ]).catch(() => {
+          // Ignorar - continuar mesmo se não encontrar
         });
+      } catch {
+        // Continuar mesmo se não encontrar seletor
+      }
 
       // Verificar se o processo foi encontrado
       await this.emitProgress({

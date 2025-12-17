@@ -309,22 +309,39 @@ export function ChatPage() {
       "🧠 Analisando sua mensagem e detectando a intenção..."
     );
 
-    // Atualizar mensagem após alguns segundos para mostrar progresso
-    const progressInterval = setInterval(() => {
-      const elapsed = Math.floor(
-        (Date.now() - parseInt(initialStatusId.split("-")[1])) / 1000
-      );
-      if (elapsed > 3 && statusMessageIdRef.current === initialStatusId) {
-        replaceStatusMessage(initialStatusId, {
-          id: initialStatusId,
-          role: "assistant",
-          content:
-            "⏳ Processando sua solicitação... Isso pode levar alguns segundos.",
-          timestamp: new Date().toISOString(),
-          status: "loading",
-        });
-      }
-    }, 1000);
+    // Atualizar mensagem progressivamente para mostrar o que está acontecendo
+    const progressIntervals: ReturnType<typeof setTimeout>[] = [];
+
+    // Após 2 segundos: mostrar que está processando
+    progressIntervals.push(
+      setTimeout(() => {
+        if (statusMessageIdRef.current === initialStatusId) {
+          replaceStatusMessage(initialStatusId, {
+            id: initialStatusId,
+            role: "assistant",
+            content: "🔍 Processando sua solicitação...",
+            timestamp: new Date().toISOString(),
+            status: "loading",
+          });
+        }
+      }, 2000)
+    );
+
+    // Após 5 segundos: mostrar que pode levar mais tempo
+    progressIntervals.push(
+      setTimeout(() => {
+        if (statusMessageIdRef.current === initialStatusId) {
+          replaceStatusMessage(initialStatusId, {
+            id: initialStatusId,
+            role: "assistant",
+            content:
+              "⏳ Processando sua solicitação... Isso pode levar alguns segundos.",
+            timestamp: new Date().toISOString(),
+            status: "loading",
+          });
+        }
+      }, 5000)
+    );
 
     try {
       // Chamar API do backend
@@ -337,8 +354,8 @@ export function ChatPage() {
         hasSources: !!response.sources,
       });
 
-      // Limpar intervalo de progresso
-      clearInterval(progressInterval);
+      // Limpar intervalos de progresso
+      progressIntervals.forEach((interval) => clearTimeout(interval));
 
       // Remover mensagem de status inicial
       setMessages((prev) => prev.filter((msg) => msg.id !== initialStatusId));
@@ -362,33 +379,76 @@ export function ChatPage() {
         if (response.protocolNumber) {
           statusId = addStatusMessage(
             "esaj_search",
-            `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Isso pode levar até 1 minuto. Por favor, aguarde.`
+            `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n📄 Conectando ao portal...`
           );
 
-          // Atualizar mensagem após alguns segundos para mostrar progresso
-          setTimeout(() => {
-            if (statusId && statusMessageIdRef.current === statusId) {
-              replaceStatusMessage(statusId, {
-                id: statusId,
-                role: "assistant",
-                content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n📄 Acessando o portal e preenchendo o formulário de busca...`,
-                timestamp: new Date().toISOString(),
-                status: "esaj_search",
-              });
-            }
-          }, 10000);
+          // Atualizar mensagem progressivamente para mostrar o que está acontecendo
+          const esajProgressIntervals: ReturnType<typeof setTimeout>[] = [];
 
+          // Após 3 segundos: acessando portal
+          esajProgressIntervals.push(
+            setTimeout(() => {
+              if (statusId && statusMessageIdRef.current === statusId) {
+                replaceStatusMessage(statusId, {
+                  id: statusId,
+                  role: "assistant",
+                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n📄 Acessando o portal e preenchendo o formulário de busca...`,
+                  timestamp: new Date().toISOString(),
+                  status: "esaj_search",
+                });
+              }
+            }, 3000)
+          );
+
+          // Após 8 segundos: aguardando resposta
+          esajProgressIntervals.push(
+            setTimeout(() => {
+              if (statusId && statusMessageIdRef.current === statusId) {
+                replaceStatusMessage(statusId, {
+                  id: statusId,
+                  role: "assistant",
+                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Aguardando resposta do portal... Isso pode levar alguns segundos.`,
+                  timestamp: new Date().toISOString(),
+                  status: "esaj_search",
+                });
+              }
+            }, 8000)
+          );
+
+          // Após 15 segundos: ainda processando
+          esajProgressIntervals.push(
+            setTimeout(() => {
+              if (statusId && statusMessageIdRef.current === statusId) {
+                replaceStatusMessage(statusId, {
+                  id: statusId,
+                  role: "assistant",
+                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Ainda processando... O portal pode estar lento. Por favor, aguarde.`,
+                  timestamp: new Date().toISOString(),
+                  status: "esaj_search",
+                });
+              }
+            }, 15000)
+          );
+
+          // Após 25 segundos: quase finalizando
+          esajProgressIntervals.push(
+            setTimeout(() => {
+              if (statusId && statusMessageIdRef.current === statusId) {
+                replaceStatusMessage(statusId, {
+                  id: statusId,
+                  role: "assistant",
+                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Quase finalizando... Por favor, aguarde mais alguns instantes.`,
+                  timestamp: new Date().toISOString(),
+                  status: "esaj_search",
+                });
+              }
+            }, 25000)
+          );
+
+          // Limpar intervalos quando a resposta chegar
           setTimeout(() => {
-            if (statusId && statusMessageIdRef.current === statusId) {
-              replaceStatusMessage(statusId, {
-                id: statusId,
-                role: "assistant",
-                content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Aguardando resposta do portal... Isso pode levar alguns segundos.`,
-                timestamp: new Date().toISOString(),
-                status: "esaj_search",
-              });
-            }
-          }, 20000);
+            esajProgressIntervals.forEach((interval) => clearTimeout(interval));
+          }, 60000); // Limpar após 1 minuto
         }
       } else {
         // Para outras intenções (GENERAL_QUERY), adicionar mensagem mais descritiva
@@ -466,10 +526,8 @@ export function ChatPage() {
         config: err.config,
       });
 
-      // Limpar intervalo de progresso se existir
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
+      // Limpar intervalos de progresso se existirem
+      progressIntervals.forEach((interval) => clearTimeout(interval));
 
       // Remover mensagem de status se existir
       if (statusMessageIdRef.current) {

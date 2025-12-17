@@ -133,17 +133,28 @@ Analise as movimentações/andamentos do processo abaixo e gere um resumo juríd
 6. Seja objetivo, preciso e use linguagem jurídica apropriada, mas acessível
 7. Se não houver informações suficientes sobre algum aspecto, indique claramente
 
-**Formato do Resumo (obrigatório - use quebras de linha e formatação markdown):**
+**Formato do Resumo (obrigatório - SEMPRE use quebras de linha duplas entre seções):**
 
 **Status:** [status geral do processo]
 
 **Fase:** [fase processual atual]
 
 **Decisões Relevantes:**
-[principais decisões judiciais, sentenças e seus efeitos - uma por linha com data quando disponível]
+
+[Liste cada decisão em uma linha separada, com data quando disponível. Exemplo:
+- **05/03/2025:** Descrição da decisão
+- **07/05/2025:** Descrição da decisão]
+
+**Partes Envolvidas:**
+
+[Liste as partes envolvidas. Exemplo:
+- Autor/Exequente: Nome
+- Réu/Executado: Nome
+- Advogados: Nome (OAB XXX)]
 
 **Resumo:**
-[resumo narrativo focado nos eventos jurídicos mais relevantes, ignorando detalhes administrativos]
+
+[resumo narrativo focado nos eventos jurídicos mais relevantes, ignorando detalhes administrativos. Use parágrafos separados por linha em branco quando necessário]
 
 **Movimentações do Processo:**
 ${movementsText}
@@ -252,7 +263,7 @@ Analise o documento abaixo e gere um resumo jurídico conciso, estruturado e pro
 5. Mencione **prazos, valores ou condições** importantes quando aplicável
 6. Seja objetivo, preciso e use linguagem jurídica apropriada, mas acessível
 
-**Formato do Resumo (obrigatório - use quebras de linha e formatação markdown):**
+**Formato do Resumo (obrigatório - SEMPRE use quebras de linha duplas entre seções):**
 
 **Tipo de Documento:** [tipo identificado]
 
@@ -263,7 +274,8 @@ Analise o documento abaixo e gere um resumo jurídico conciso, estruturado e pro
 **Fundamentos:** [fundamentos jurídicos mencionados, se houver]
 
 **Resumo Detalhado:**
-[resumo narrativo completo do documento]
+
+[resumo narrativo completo do documento. Use parágrafos separados por linha em branco quando necessário]
 
 **Texto do Documento:**
 ${documentText}
