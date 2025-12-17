@@ -40,7 +40,9 @@ if (process.env.QDRANT_URL) {
     ragChainService = undefined;
   }
 } else {
-  console.warn("⚠️  QDRANT_URL não definido. Chat funcionará sem RAG (apenas LLM direto)");
+  console.warn(
+    "⚠️  QDRANT_URL não definido. Chat funcionará sem RAG (apenas LLM direto)"
+  );
 }
 
 // Inicializar DocumentService para integração com Google Drive e Base de Conhecimento
@@ -48,7 +50,9 @@ let documentService: DocumentService | undefined = undefined;
 
 if (process.env.QDRANT_URL) {
   try {
-    console.log("🔧 Inicializando DocumentService para integração com Google Drive...");
+    console.log(
+      "🔧 Inicializando DocumentService para integração com Google Drive..."
+    );
     const qdrantClient = getQdrantClient();
     const embeddingService = new EmbeddingService();
     const documentProcessor = new DocumentProcessor();
@@ -65,11 +69,15 @@ if (process.env.QDRANT_URL) {
     console.log("✅ DocumentService inicializado com sucesso");
   } catch (error: any) {
     console.error("❌ Erro ao inicializar DocumentService:", error.message);
-    console.warn("⚠️  Documentos do e-SAJ não serão salvos na Base de Conhecimento");
+    console.warn(
+      "⚠️  Documentos do e-SAJ não serão salvos na Base de Conhecimento"
+    );
     documentService = undefined;
   }
 } else {
-  console.warn("⚠️  QDRANT_URL não definido. DocumentService não será inicializado.");
+  console.warn(
+    "⚠️  QDRANT_URL não definido. DocumentService não será inicializado."
+  );
 }
 
 const chatController = new ChatController(
@@ -79,11 +87,19 @@ const chatController = new ChatController(
   documentService
 );
 
-// Rota para enviar mensagem ao chat
-router.post("/message", (req, res) => chatController.handleChatRequest(req, res));
+// Rota para enviar mensagem ao chat (modo tradicional - resposta única)
+router.post("/message", (req, res) =>
+  chatController.handleChatRequest(req, res)
+);
+
+// Rota para enviar mensagem ao chat com SSE (progresso em tempo real)
+router.post("/message-stream", (req, res) =>
+  chatController.handleChatRequestSSE(req, res)
+);
 
 // Rota para servir arquivos baixados do e-SAJ
-router.get("/download/:fileName", (req, res) => chatController.serveDownload(req, res));
+router.get("/download/:fileName", (req, res) =>
+  chatController.serveDownload(req, res)
+);
 
 export default router;
-

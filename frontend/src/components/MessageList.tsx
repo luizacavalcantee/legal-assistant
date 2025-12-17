@@ -41,11 +41,11 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
       case "rag":
         return "📚 Buscando informações na base de conhecimento...";
       case "esaj_search":
-        return "🔍 Buscando processo no portal e-SAJ...";
+        return "🔍 Acessando portal e-SAJ e buscando processo...";
       case "esaj_download":
         return "📥 Baixando documento do e-SAJ...";
       case "loading":
-        return "⏳ Processando sua solicitação...";
+        return "⏳ Processando...";
       default:
         return "💭 Pensando...";
     }

@@ -303,191 +303,65 @@ export function ChatPage() {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Adicionar mensagem de status inicial mais descritiva
-    const initialStatusId = addStatusMessage(
+    // Adicionar mensagem de status inicial
+    let currentStatusId: string | null = addStatusMessage(
       "loading",
-      "🧠 Analisando sua mensagem e detectando a intenção..."
-    );
-
-    // Atualizar mensagem progressivamente para mostrar o que está acontecendo
-    const progressIntervals: ReturnType<typeof setTimeout>[] = [];
-
-    // Após 2 segundos: mostrar que está processando
-    progressIntervals.push(
-      setTimeout(() => {
-        if (statusMessageIdRef.current === initialStatusId) {
-          replaceStatusMessage(initialStatusId, {
-            id: initialStatusId,
-            role: "assistant",
-            content: "🔍 Processando sua solicitação...",
-            timestamp: new Date().toISOString(),
-            status: "loading",
-          });
-        }
-      }, 2000)
-    );
-
-    // Após 5 segundos: mostrar que pode levar mais tempo
-    progressIntervals.push(
-      setTimeout(() => {
-        if (statusMessageIdRef.current === initialStatusId) {
-          replaceStatusMessage(initialStatusId, {
-            id: initialStatusId,
-            role: "assistant",
-            content:
-              "⏳ Processando sua solicitação... Isso pode levar alguns segundos.",
-            timestamp: new Date().toISOString(),
-            status: "loading",
-          });
-        }
-      }, 5000)
+      "🧠 Analisando sua mensagem..."
     );
 
     try {
-      // Chamar API do backend
-      console.log("📤 Enviando mensagem para o backend...");
-      const response = await chatService.sendMessage({ message });
-      console.log("✅ Resposta recebida do backend:", {
+      // Chamar API do backend com SSE
+      console.log("📤 Enviando mensagem para o backend (SSE)...");
+      const response = await chatService.sendMessageWithProgress(
+        { message },
+        (event) => {
+          console.log("📨 Evento de progresso recebido:", event);
+
+          // Atualizar mensagem de status com base no evento
+          if (event.type === "progress" && currentStatusId) {
+            // Mapear status do backend para status do frontend
+            const statusMap: Record<string, any> = {
+              intent_detection: { status: "loading", emoji: "🧠" },
+              rag: { status: "rag", emoji: "📚" },
+              esaj_search: { status: "esaj_search", emoji: "🔍" },
+              esaj_processing: { status: "esaj_search", emoji: "📄" },
+              esaj_download: { status: "esaj_download", emoji: "📥" },
+              llm_processing: { status: "loading", emoji: "💭" },
+              loading: { status: "loading", emoji: "⏳" },
+            };
+
+            const mappedStatus = statusMap[event.status] || {
+              status: "loading",
+              emoji: "⏳",
+            };
+
+            replaceStatusMessage(currentStatusId, {
+              id: currentStatusId,
+              role: "assistant",
+              content: event.message,
+              timestamp: new Date().toISOString(),
+              status: mappedStatus.status,
+            });
+          }
+        }
+      );
+
+      console.log("✅ Resposta completa recebida do backend:", {
         intention: response.intention,
         hasResponse: !!response.response,
         hasDownloadUrl: !!response.downloadUrl,
         hasSources: !!response.sources,
       });
 
-      // Limpar intervalos de progresso
-      progressIntervals.forEach((interval) => clearTimeout(interval));
-
-      // Remover mensagem de status inicial
-      setMessages((prev) => prev.filter((msg) => msg.id !== initialStatusId));
-      if (statusMessageIdRef.current === initialStatusId) {
-        statusMessageIdRef.current = null;
+      // Remover mensagem de status
+      if (currentStatusId) {
+        removeStatusMessage(currentStatusId);
+        currentStatusId = null;
       }
-
-      // Adicionar mensagens de status baseadas na intenção com mais detalhes
-      let statusId: string | null = null;
-      if (response.intention === "RAG_QUERY") {
-        statusId = addStatusMessage(
-          "rag",
-          "📚 Buscando informações na base de conhecimento...\n\n🔍 Analisando documentos relevantes para sua pergunta."
-        );
-      } else if (
-        response.intention === "DOWNLOAD_DOCUMENT" ||
-        response.intention === "SUMMARIZE_PROCESS" ||
-        response.intention === "SUMMARIZE_DOCUMENT" ||
-        response.intention === "QUERY_DOCUMENT"
-      ) {
-        if (response.protocolNumber) {
-          statusId = addStatusMessage(
-            "esaj_search",
-            `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n📄 Conectando ao portal...`
-          );
-
-          // Atualizar mensagem progressivamente para mostrar o que está acontecendo
-          const esajProgressIntervals: ReturnType<typeof setTimeout>[] = [];
-
-          // Após 3 segundos: acessando portal
-          esajProgressIntervals.push(
-            setTimeout(() => {
-              if (statusId && statusMessageIdRef.current === statusId) {
-                replaceStatusMessage(statusId, {
-                  id: statusId,
-                  role: "assistant",
-                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n📄 Acessando o portal e preenchendo o formulário de busca...`,
-                  timestamp: new Date().toISOString(),
-                  status: "esaj_search",
-                });
-              }
-            }, 3000)
-          );
-
-          // Após 8 segundos: aguardando resposta
-          esajProgressIntervals.push(
-            setTimeout(() => {
-              if (statusId && statusMessageIdRef.current === statusId) {
-                replaceStatusMessage(statusId, {
-                  id: statusId,
-                  role: "assistant",
-                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Aguardando resposta do portal... Isso pode levar alguns segundos.`,
-                  timestamp: new Date().toISOString(),
-                  status: "esaj_search",
-                });
-              }
-            }, 8000)
-          );
-
-          // Após 15 segundos: ainda processando
-          esajProgressIntervals.push(
-            setTimeout(() => {
-              if (statusId && statusMessageIdRef.current === statusId) {
-                replaceStatusMessage(statusId, {
-                  id: statusId,
-                  role: "assistant",
-                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Ainda processando... O portal pode estar lento. Por favor, aguarde.`,
-                  timestamp: new Date().toISOString(),
-                  status: "esaj_search",
-                });
-              }
-            }, 15000)
-          );
-
-          // Após 25 segundos: quase finalizando
-          esajProgressIntervals.push(
-            setTimeout(() => {
-              if (statusId && statusMessageIdRef.current === statusId) {
-                replaceStatusMessage(statusId, {
-                  id: statusId,
-                  role: "assistant",
-                  content: `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Quase finalizando... Por favor, aguarde mais alguns instantes.`,
-                  timestamp: new Date().toISOString(),
-                  status: "esaj_search",
-                });
-              }
-            }, 25000)
-          );
-
-          // Limpar intervalos quando a resposta chegar
-          setTimeout(() => {
-            esajProgressIntervals.forEach((interval) => clearTimeout(interval));
-          }, 60000); // Limpar após 1 minuto
-        }
-      } else {
-        // Para outras intenções (GENERAL_QUERY), adicionar mensagem mais descritiva
-        statusId = addStatusMessage(
-          "loading",
-          "🤔 Processando sua pergunta...\n\n💭 Gerando resposta personalizada para você."
-        );
-      }
-
-      // Simular delay mínimo para mostrar status (opcional)
-      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Verificar se há link de download na resposta
       const downloadLink = extractDownloadLink(response.response);
       let displayContent = response.response;
-
-      // Se for download, adicionar status de download com mais detalhes
-      if (response.intention === "DOWNLOAD_DOCUMENT" && statusId) {
-        replaceStatusMessage(statusId, {
-          id: statusId,
-          role: "assistant",
-          content:
-            "✅ Processo encontrado!\n\n📥 Acessando a pasta digital e preparando o download do documento...",
-          timestamp: new Date().toISOString(),
-          status: "esaj_download",
-        });
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Atualizar para mostrar progresso do download
-        replaceStatusMessage(statusId, {
-          id: statusId,
-          role: "assistant",
-          content:
-            "✅ Processo encontrado!\n\n📥 Baixando documento do e-SAJ... Isso pode levar alguns segundos.",
-          timestamp: new Date().toISOString(),
-          status: "esaj_download",
-        });
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
 
       if (downloadLink) {
         // Extrair nome do arquivo da URL
@@ -498,11 +372,6 @@ export function ChatPage() {
 
         // Limpar mensagem para mostrar apenas informações essenciais
         displayContent = cleanDownloadMessage(response.response);
-      }
-
-      // Remover mensagem de status se ainda existir
-      if (statusId) {
-        removeStatusMessage(statusId);
       }
 
       // Adicionar resposta da IA ao histórico
@@ -526,12 +395,10 @@ export function ChatPage() {
         config: err.config,
       });
 
-      // Limpar intervalos de progresso se existirem
-      progressIntervals.forEach((interval) => clearTimeout(interval));
-
       // Remover mensagem de status se existir
-      if (statusMessageIdRef.current) {
-        removeStatusMessage(statusMessageIdRef.current);
+      if (currentStatusId) {
+        removeStatusMessage(currentStatusId);
+        currentStatusId = null;
       }
 
       // Determinar mensagem de erro mais descritiva
