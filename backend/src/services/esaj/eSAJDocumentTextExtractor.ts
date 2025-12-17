@@ -121,7 +121,7 @@ export class eSAJDocumentTextExtractor extends eSAJBase {
           Accept: "application/pdf,application/octet-stream,*/*",
         },
         responseType: "arraybuffer",
-        timeout: 60000,
+        timeout: 180000, // 180 segundos (3 minutos) - downloads de PDF podem demorar
       });
 
       const pdfBuffer = Buffer.from(response.data);

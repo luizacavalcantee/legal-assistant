@@ -795,7 +795,7 @@ export class eSAJDocumentDownloader extends eSAJBase {
           Referer: pdfUrl,
         },
         responseType: "stream",
-        timeout: 60000, // 60 segundos
+        timeout: 180000, // 180 segundos (3 minutos) - downloads de PDF podem demorar
       });
 
       // Criar diretório se não existir
