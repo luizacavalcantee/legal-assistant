@@ -1,19 +1,8 @@
 import { useState, useEffect, FormEvent } from "react";
-import {
-  CreateDocumentDto,
-  UpdateDocumentDto,
-  StatusIndexacao,
-} from "../types/document.types";
+import { CreateDocumentDto, UpdateDocumentDto } from "../types/document.types";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import {
   Dialog,
   DialogContent,
@@ -24,12 +13,15 @@ import {
 } from "./ui/dialog";
 
 interface DocumentFormProps {
-  onSubmit: (data: CreateDocumentDto | UpdateDocumentDto, file?: File) => Promise<void>;
+  onSubmit: (
+    data: CreateDocumentDto | UpdateDocumentDto,
+    file?: File
+  ) => Promise<void>;
   onCancel: () => void;
   initialData?: {
     titulo: string;
     caminho_arquivo: string;
-    status_indexacao?: StatusIndexacao;
+    status_indexacao?: string;
   };
   isEdit?: boolean;
   open: boolean;
@@ -45,7 +37,6 @@ export function DocumentForm({
   const [formData, setFormData] = useState({
     titulo: initialData?.titulo || "",
     caminho_arquivo: initialData?.caminho_arquivo || "",
-    status_indexacao: initialData?.status_indexacao || StatusIndexacao.PENDENTE,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,14 +48,12 @@ export function DocumentForm({
       setFormData({
         titulo: initialData.titulo || "",
         caminho_arquivo: initialData.caminho_arquivo || "",
-        status_indexacao: initialData.status_indexacao || StatusIndexacao.PENDENTE,
       });
     } else if (!isEdit && open) {
       // Reset form quando criar novo documento
       setFormData({
         titulo: "",
         caminho_arquivo: "",
-        status_indexacao: StatusIndexacao.PENDENTE,
       });
       setSelectedFile(null);
     }
@@ -97,7 +86,6 @@ export function DocumentForm({
         setFormData({
           titulo: "",
           caminho_arquivo: "",
-          status_indexacao: StatusIndexacao.PENDENTE,
         });
         setSelectedFile(null);
       }
@@ -177,7 +165,6 @@ export function DocumentForm({
               </p>
             </div>
           )}
-
 
           <DialogFooter>
             <Button
