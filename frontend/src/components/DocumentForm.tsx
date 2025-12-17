@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import {
   CreateDocumentDto,
   UpdateDocumentDto,
@@ -51,6 +51,25 @@ export function DocumentForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Atualizar formData quando initialData mudar ou quando o modal abrir (especialmente ao editar)
+  useEffect(() => {
+    if (open && initialData && isEdit) {
+      setFormData({
+        titulo: initialData.titulo || "",
+        caminho_arquivo: initialData.caminho_arquivo || "",
+        status_indexacao: initialData.status_indexacao || StatusIndexacao.PENDENTE,
+      });
+    } else if (!isEdit && open) {
+      // Reset form quando criar novo documento
+      setFormData({
+        titulo: "",
+        caminho_arquivo: "",
+        status_indexacao: StatusIndexacao.PENDENTE,
+      });
+      setSelectedFile(null);
+    }
+  }, [initialData, isEdit, open]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -69,9 +88,12 @@ export function DocumentForm({
 
     setIsSubmitting(true);
     try {
-      await onSubmit(formData, selectedFile || undefined);
-      // Reset form if not editing
-      if (!isEdit) {
+      // Ao editar, enviar apenas o título
+      if (isEdit) {
+        await onSubmit({ titulo: formData.titulo }, undefined);
+      } else {
+        await onSubmit(formData, selectedFile || undefined);
+        // Reset form if not editing
         setFormData({
           titulo: "",
           caminho_arquivo: "",
@@ -106,7 +128,7 @@ export function DocumentForm({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Atualize as informações do documento."
+              ? "Atualize o nome do documento."
               : "Preencha os dados para criar um novo documento."}
           </DialogDescription>
         </DialogHeader>
@@ -156,49 +178,6 @@ export function DocumentForm({
             </div>
           )}
 
-          {isEdit && (
-            <div className="space-y-2">
-              <Label htmlFor="caminho_arquivo">Caminho do Arquivo</Label>
-              <Input
-                id="caminho_arquivo"
-                value={formData.caminho_arquivo}
-                onChange={(e) =>
-                  setFormData({ ...formData, caminho_arquivo: e.target.value })
-                }
-                placeholder="Ex: /documentos/lei-13105-2015.pdf"
-                disabled={isSubmitting}
-              />
-            </div>
-          )}
-
-          {isEdit && (
-            <div className="space-y-2">
-              <Label htmlFor="status_indexacao">Status de Indexação</Label>
-              <Select
-                value={formData.status_indexacao}
-                onValueChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    status_indexacao: value as StatusIndexacao,
-                  })
-                }
-                disabled={isSubmitting}
-              >
-                <SelectTrigger id="status_indexacao">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={StatusIndexacao.PENDENTE}>
-                    Pendente
-                  </SelectItem>
-                  <SelectItem value={StatusIndexacao.INDEXADO}>
-                    Indexado
-                  </SelectItem>
-                  <SelectItem value={StatusIndexacao.ERRO}>Erro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           <DialogFooter>
             <Button
