@@ -24,14 +24,14 @@ COPY prisma ./prisma
 # Instalar dependências
 RUN npm ci --only=production=false
 
-# Gerar Prisma Client
-RUN npm run prisma:generate
-
 # Copiar o resto dos arquivos
 COPY . .
 
 # Criar diretórios necessários
 RUN mkdir -p documents downloads_esaj .cache/puppeteer
+
+# Gerar Prisma Client com DATABASE_URL dummy
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run prisma:generate
 
 # Build da aplicação
 RUN npm run build
