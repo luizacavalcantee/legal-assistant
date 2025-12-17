@@ -17,6 +17,7 @@ services:
       retries: 5
     networks:
       - assistente-network
+    restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -26,40 +27,58 @@ services:
       - "6334:6334"  # gRPC API
     volumes:
       - qdrant_data:/qdrant/storage
-    # Healthcheck removido - o Qdrant inicia rapidamente e o backend tem retry logic
     networks:
       - assistente-network
+    restart: unless-stopped
 
-  # Backend roda localmente (não no Docker) para facilitar desenvolvimento
-  # Descomente apenas se quiser rodar o backend no Docker também
-  # backend:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: assistente-backend
-  #   environment:
-  #     - NODE_ENV=development
-  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/assistente-db?schema=public
-  #     - PORT=3000
-  #     - QDRANT_URL=http://qdrant:6333
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./backend:/app
-  #     - /app/node_modules
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     qdrant:
-  #       condition: service_started
-  #   networks:
-  #     - assistente-network
-  #   command: sh -c "npm run prisma:generate && npm run prisma:migrate && npm run dev"
-  #   restart: unless-stopped
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: assistente-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/assistente-db?schema=public
+      - QDRANT_URL=http://qdrant:6333
+      - NODE_ENV=production
+    ports:
+      - "3000:3000"
+    volumes:
+      - backend_documents:/app/documents
+      - backend_downloads:/app/downloads_esaj
+      - backend_cache:/app/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks:
+      - assistente-network
+    command: sh -c "npm run prisma:migrate:deploy && npm start"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:3000
+    container_name: assistente-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - assistente-network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   qdrant_data:
+  backend_documents:
+  backend_downloads:
+  backend_cache:
 
 networks:
   assistente-network:
