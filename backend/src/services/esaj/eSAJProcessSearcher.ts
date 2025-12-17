@@ -29,13 +29,14 @@ export class eSAJProcessSearcher extends eSAJBase {
     progressCallback?: ProgressCallback
   ): Promise<ProcessSearchResult> {
     let page: Page | null = null;
+    
+    // Configurar callback de progresso temporariamente (fora do try para estar acessível em catch/finally)
+    const originalCallback = this.progressCallback;
+    if (progressCallback) {
+      this.setProgressCallback(progressCallback);
+    }
 
     try {
-      // Configurar callback de progresso temporariamente
-      const originalCallback = this.progressCallback;
-      if (progressCallback) {
-        this.setProgressCallback(progressCallback);
-      }
 
       await this.emitProgress({
         stage: "init",

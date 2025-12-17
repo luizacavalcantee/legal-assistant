@@ -133,11 +133,17 @@ Analise as movimentações/andamentos do processo abaixo e gere um resumo juríd
 6. Seja objetivo, preciso e use linguagem jurídica apropriada, mas acessível
 7. Se não houver informações suficientes sobre algum aspecto, indique claramente
 
-**Formato do Resumo (obrigatório):**
-- **Status:** [status geral do processo]
-- **Fase:** [fase processual atual]
-- **Decisões Relevantes:** [principais decisões judiciais, sentenças e seus efeitos]
-- **Resumo:** [resumo narrativo focado nos eventos jurídicos mais relevantes, ignorando detalhes administrativos]
+**Formato do Resumo (obrigatório - use quebras de linha e formatação markdown):**
+
+**Status:** [status geral do processo]
+
+**Fase:** [fase processual atual]
+
+**Decisões Relevantes:**
+[principais decisões judiciais, sentenças e seus efeitos - uma por linha com data quando disponível]
+
+**Resumo:**
+[resumo narrativo focado nos eventos jurídicos mais relevantes, ignorando detalhes administrativos]
 
 **Movimentações do Processo:**
 ${movementsText}
@@ -166,8 +172,8 @@ Gere o resumo agora seguindo exatamente o formato especificado, focando apenas e
         throw new Error("Resposta vazia do LLM ao gerar resumo");
       }
 
-      // Remover markdown (**, __, etc.) para exibição limpa
-      return this.removeMarkdown(summary.trim());
+      // Manter markdown para renderização no frontend
+      return summary.trim();
     } catch (error: any) {
       console.error("Erro ao gerar resumo do processo:", error);
 
@@ -246,12 +252,18 @@ Analise o documento abaixo e gere um resumo jurídico conciso, estruturado e pro
 5. Mencione **prazos, valores ou condições** importantes quando aplicável
 6. Seja objetivo, preciso e use linguagem jurídica apropriada, mas acessível
 
-**Formato do Resumo (obrigatório):**
-- **Tipo de Documento:** [tipo identificado]
-- **Partes:** [partes envolvidas]
-- **Conteúdo Principal:** [resumo do conteúdo principal - pedidos, decisão, etc.]
-- **Fundamentos:** [fundamentos jurídicos mencionados, se houver]
-- **Resumo Detalhado:** [resumo narrativo completo do documento]
+**Formato do Resumo (obrigatório - use quebras de linha e formatação markdown):**
+
+**Tipo de Documento:** [tipo identificado]
+
+**Partes:** [partes envolvidas]
+
+**Conteúdo Principal:** [resumo do conteúdo principal - pedidos, decisão, etc.]
+
+**Fundamentos:** [fundamentos jurídicos mencionados, se houver]
+
+**Resumo Detalhado:**
+[resumo narrativo completo do documento]
 
 **Texto do Documento:**
 ${documentText}
@@ -280,8 +292,8 @@ Gere o resumo agora seguindo exatamente o formato especificado:`;
         throw new Error("Resposta vazia do LLM ao gerar resumo do documento");
       }
 
-      // Remover markdown (**, __, etc.) para exibição limpa
-      return this.removeMarkdown(summary.trim());
+      // Manter markdown para renderização no frontend
+      return summary.trim();
     } catch (error: any) {
       console.error("Erro ao gerar resumo do documento:", error);
 
@@ -396,8 +408,8 @@ ${documentText}
         );
       }
 
-      // Remover markdown (**, __, etc.) para exibição limpa
-      return this.removeMarkdown(answer.trim());
+      // Manter markdown para renderização no frontend
+      return answer.trim();
     } catch (error: any) {
       console.error("Erro ao responder pergunta sobre documento:", error);
 

@@ -1,5 +1,7 @@
+import React from "react";
 import { ChatMessage } from "../types/chat.types";
 import { Loader2, Bot, User, AlertCircle, FileText } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -93,15 +95,63 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                   : "bg-muted text-foreground"
               }`}
             >
-              <p
-                className={`text-sm whitespace-pre-wrap break-words ${
-                  isErrorMessage ? "text-destructive" : ""
-                }`}
-              >
-                {isStatusMessage
-                  ? getStatusMessage(message.status)
-                  : message.content}
-              </p>
+              {isStatusMessage ? (
+                <p
+                  className={`text-sm whitespace-pre-wrap break-words ${
+                    isErrorMessage ? "text-destructive" : ""
+                  }`}
+                >
+                  {getStatusMessage(message.status)}
+                </p>
+              ) : (
+                <div
+                  className={`text-sm prose prose-sm dark:prose-invert max-w-none break-words ${
+                    isErrorMessage ? "text-destructive" : ""
+                  }`}
+                >
+                  <ReactMarkdown
+                    components={{
+                      p: ({ children }: { children?: React.ReactNode }) => (
+                        <p className="mb-2 last:mb-0">{children}</p>
+                      ),
+                      strong: ({
+                        children,
+                      }: {
+                        children?: React.ReactNode;
+                      }) => (
+                        <strong className="font-semibold">{children}</strong>
+                      ),
+                      em: ({ children }: { children?: React.ReactNode }) => (
+                        <em className="italic">{children}</em>
+                      ),
+                      ul: ({ children }: { children?: React.ReactNode }) => (
+                        <ul className="list-disc list-inside mb-2 space-y-1">
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({ children }: { children?: React.ReactNode }) => (
+                        <ol className="list-decimal list-inside mb-2 space-y-1">
+                          {children}
+                        </ol>
+                      ),
+                      li: ({ children }: { children?: React.ReactNode }) => (
+                        <li className="ml-2">{children}</li>
+                      ),
+                      h1: ({ children }: { children?: React.ReactNode }) => (
+                        <h1 className="text-lg font-bold mb-2">{children}</h1>
+                      ),
+                      h2: ({ children }: { children?: React.ReactNode }) => (
+                        <h2 className="text-base font-bold mb-2">{children}</h2>
+                      ),
+                      h3: ({ children }: { children?: React.ReactNode }) => (
+                        <h3 className="text-sm font-bold mb-1">{children}</h3>
+                      ),
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              )}
 
               {/* Exibir sources se disponíveis */}
               {message.sources && message.sources.length > 0 && (
