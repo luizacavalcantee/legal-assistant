@@ -8,10 +8,15 @@ import {
   UserIntent,
 } from "../services/IntentDetectionService";
 import { eSAJService as eSAJServiceClass } from "../services/eSAJService";
-import type { eSAJService } from "../services/eSAJService";
-import { ChatMessageRequest, ChatMessageResponse } from "../types/chat.types";
+import { ChatMessageRequest } from "../types/chat.types";
 import { GoogleDriveService } from "../services/GoogleDriveService";
 import { DocumentService } from "../services/DocumentService";
+import {
+  RequestValidator,
+  ResponseBuilder,
+  SSEHelper,
+  IntentRouter,
+} from "./chat";
 
 export class ChatController {
   private llmService: LLMService;
@@ -20,6 +25,7 @@ export class ChatController {
   private eSAJService: eSAJServiceClass;
   private googleDriveService: GoogleDriveService;
   private documentService?: DocumentService;
+  private intentRouter: IntentRouter;
 
   constructor(
     llmService: LLMService,
@@ -33,6 +39,13 @@ export class ChatController {
     this.eSAJService = eSAJService ?? new eSAJServiceClass();
     this.googleDriveService = new GoogleDriveService();
     this.documentService = documentService;
+    this.intentRouter = new IntentRouter(
+      llmService,
+      this.eSAJService,
+      this.googleDriveService,
+      ragChainService,
+      documentService
+    );
   }
 
   /**
@@ -79,26 +92,15 @@ export class ChatController {
     try {
       const { message }: ChatMessageRequest = req.body;
 
-      // Validação básica
-      if (
-        !message ||
-        typeof message !== "string" ||
-        message.trim().length === 0
-      ) {
-        return res.status(400).json({
-          error:
-            "Campo 'message' é obrigatório e deve ser uma string não vazia",
+      // Validação
+      const validation = RequestValidator.validateChatMessage(req);
+      if (!validation.isValid) {
+        return res.status(validation.statusCode!).json({
+          error: validation.error,
         });
       }
 
-      // Limitar tamanho da mensagem
-      if (message.length > 2000) {
-        return res.status(400).json({
-          error: "Mensagem muito longa. Máximo de 2000 caracteres permitido",
-        });
-      }
-
-      // 1. Detectar intenção do usuário
+      // Detectar intenção
       console.log("🧠 Detectando intenção do usuário...");
       const intentResult = await this.intentDetectionService.detectIntent(
         message.trim()
@@ -111,529 +113,77 @@ export class ChatController {
         }`
       );
 
-      let response: string;
-      let sources: ChatMessageResponse["sources"] = undefined;
-      let protocolNumber: string | undefined = intentResult.protocolNumber;
-      let downloadUrlResponse: string | undefined = undefined;
-      let fileNameResponse: string | undefined = undefined;
+      // Rotear para o handler apropriado
+      const result = await this.intentRouter.route(
+        intentResult,
+        message.trim(),
+        req
+      );
 
-      // 2. Rotear baseado na intenção
-      switch (intentResult.intention) {
-        case UserIntent.QUERY_DOCUMENT:
-        case UserIntent.DOWNLOAD_DOCUMENT:
-        case UserIntent.SUMMARIZE_PROCESS:
-        case UserIntent.SUMMARIZE_DOCUMENT:
-          // Verificar se há número de protocolo
-          if (!protocolNumber) {
-            response =
-              "Não foi possível identificar o número do protocolo na sua mensagem. " +
-              "Por favor, forneça o número do processo no formato: NNNNNNN-DD.AAAA.J.TR.OOOO";
-          } else {
-            // Buscar processo no e-SAJ
-            console.log(`🔍 Buscando processo ${protocolNumber} no e-SAJ...`);
-
-            let processResult;
-            try {
-              // Criar callback de progresso se disponível via query param ou header
-              const progressCallback =
-                req.query.progress === "true" ||
-                req.headers["x-want-progress"] === "true"
-                  ? (update: any) => {
-                      // Emitir progresso via SSE se disponível
-                      // Por enquanto, apenas logar (SSE será implementado em seguida)
-                      console.log(
-                        `📊 Progresso: ${update.stage} - ${update.message} (${
-                          update.progress || 0
-                        }%)`
-                      );
-                    }
-                  : undefined;
-
-              processResult = await this.eSAJService.findProcess(
-                protocolNumber,
-                progressCallback
-              );
-            } catch (esajError: any) {
-              console.error("❌ Erro ao acessar e-SAJ:", esajError.message);
-              if (esajError.message?.includes("Puppeteer")) {
-                response =
-                  "⚠️ Funcionalidade do e-SAJ temporariamente indisponível. " +
-                  "O serviço de web scraping requer configurações adicionais no servidor. " +
-                  "Por favor, tente novamente mais tarde ou entre em contato com o suporte.";
-              } else {
-                response =
-                  `❌ Erro ao buscar processo no e-SAJ: ${esajError.message}. ` +
-                  "Por favor, tente novamente mais tarde.";
-              }
-              // Continuar para retornar a resposta de erro
-              processResult = { found: false, error: esajError.message };
-            }
-
-            if (!processResult.found) {
-              response =
-                `Processo ${protocolNumber} não foi encontrado no portal e-SAJ. ` +
-                (processResult.error
-                  ? `Erro: ${processResult.error}`
-                  : "Verifique se o número do protocolo está correto.");
-            } else {
-              // Processo encontrado - realizar ação solicitada
-              if (intentResult.intention === UserIntent.DOWNLOAD_DOCUMENT) {
-                // Baixar documento (reutilizando a página já aberta se disponível)
-                console.log(
-                  `📥 Iniciando download de documento${
-                    intentResult.documentType
-                      ? ` (${intentResult.documentType})`
-                      : ""
-                  }...`
-                );
-                const downloadResult = await this.eSAJService.downloadDocument(
-                  protocolNumber,
-                  intentResult.documentType || "documento",
-                  processResult.processPageUrl, // Passar a URL da página de detalhes
-                  processResult.page // Passar a página já aberta para reutilização
-                );
-
-                if (downloadResult.success) {
-                  // Verificar se o arquivo foi baixado com sucesso (filePath e fileName)
-                  if (downloadResult.filePath && downloadResult.fileName) {
-                    let googleDriveFileId: string | undefined;
-                    let googleDriveViewLink: string | undefined;
-                    let finalFilePath = downloadResult.filePath;
-
-                    // ETAPA 15: Upload automático para Google Drive (US-GDRIVE-01)
-                    if (this.googleDriveService.isConfigured()) {
-                      try {
-                        console.log(`📤 Fazendo upload para Google Drive...`);
-                        const driveResult =
-                          await this.googleDriveService.uploadFile(
-                            downloadResult.filePath,
-                            downloadResult.fileName
-                          );
-
-                        if (driveResult) {
-                          googleDriveFileId = driveResult.fileId;
-                          googleDriveViewLink = driveResult.webViewLink;
-                          console.log(
-                            `✅ Arquivo enviado para Google Drive: ${driveResult.fileId}`
-                          );
-                          console.log(
-                            `   Link de visualização: ${driveResult.webViewLink}`
-                          );
-
-                          // Limpar arquivo local após upload bem-sucedido
-                          try {
-                            if (fs.existsSync(downloadResult.filePath)) {
-                              fs.unlinkSync(downloadResult.filePath);
-                              console.log(
-                                `🗑️  Arquivo local removido: ${downloadResult.filePath}`
-                              );
-                            }
-                          } catch (unlinkError: any) {
-                            console.warn(
-                              `⚠️  Erro ao remover arquivo local: ${unlinkError.message}`
-                            );
-                          }
-
-                          // Atualizar caminho para referenciar Google Drive
-                          finalFilePath = `gdrive:${driveResult.fileId}`;
-                        } else {
-                          console.warn(
-                            `⚠️  Upload para Google Drive falhou. Mantendo arquivo local.`
-                          );
-                        }
-                      } catch (driveError: any) {
-                        console.error(
-                          `❌ Erro ao fazer upload para Google Drive:`,
-                          driveError
-                        );
-                        console.log(`   Mantendo arquivo local como fallback`);
-                      }
-                    }
-
-                    // ETAPA 16: Criar documento na Base de Conhecimento para RAG (US-GDRIVE-02)
-                    if (this.documentService) {
-                      try {
-                        const documentTitle = `${
-                          downloadResult.documentType || "Documento"
-                        } - Processo ${protocolNumber}`;
-                        const document =
-                          await this.documentService.createDocument(
-                            {
-                              titulo: documentTitle,
-                              caminho_arquivo: finalFilePath,
-                            },
-                            googleDriveFileId
-                              ? undefined
-                              : downloadResult.filePath // Só passar filePath se não for Google Drive
-                          );
-
-                        // Atualizar com metadados do Google Drive se disponível
-                        if (googleDriveFileId && googleDriveViewLink) {
-                          const {
-                            DocumentRepository,
-                          } = require("../repositories/DocumentRepository");
-                          const repository = new DocumentRepository();
-                          await repository.update(document.id, {
-                            google_drive_file_id: googleDriveFileId,
-                            google_drive_view_link: googleDriveViewLink,
-                          });
-                          console.log(
-                            `✅ Documento criado na base de conhecimento com ID: ${document.id}`
-                          );
-                          console.log(
-                            `   Google Drive ID: ${googleDriveFileId}`
-                          );
-                        } else {
-                          console.log(
-                            `✅ Documento criado na base de conhecimento com ID: ${document.id}`
-                          );
-                        }
-                      } catch (docError: any) {
-                        console.error(
-                          `❌ Erro ao criar documento na base de conhecimento:`,
-                          docError
-                        );
-                        // Não falhar a resposta se houver erro ao criar documento
-                      }
-                    }
-
-                    // Construir URL de download/visualização
-                    let downloadUrl: string;
-                    if (googleDriveViewLink) {
-                      // Usar link do Google Drive se disponível
-                      downloadUrl = googleDriveViewLink;
-                      response =
-                        `✅ Documento baixado e enviado para Google Drive com sucesso!\n\n` +
-                        `📄 Visualize o documento clicando no link abaixo:\n` +
-                        `${googleDriveViewLink}\n\n` +
-                        `📋 Nome do arquivo: ${downloadResult.fileName}\n` +
-                        `☁️  O documento foi salvo na nuvem e será indexado para uso no RAG.`;
-                    } else {
-                      // Fallback: usar servidor local
-                      const host = req.get("host") || "";
-                      const isProduction =
-                        process.env.NODE_ENV === "production";
-                      const isLocalhost =
-                        host.includes("localhost") ||
-                        host.includes("127.0.0.1");
-                      const forwardedProto = req.get("x-forwarded-proto");
-
-                      let protocol = req.protocol;
-                      if (
-                        forwardedProto === "https" ||
-                        process.env.FORCE_HTTPS === "true" ||
-                        (isProduction && !isLocalhost)
-                      ) {
-                        protocol = "https";
-                      }
-
-                      const baseUrl = `${protocol}://${host}`;
-                      downloadUrl = `${baseUrl}/chat/download/${encodeURIComponent(
-                        downloadResult.fileName
-                      )}`;
-
-                      console.log(
-                        `🔗 URL de download gerada: ${downloadUrl} (protocol: ${protocol}, forwarded-proto: ${forwardedProto})`
-                      );
-
-                      response =
-                        `✅ Documento baixado com sucesso!\n\n` +
-                        `📄 [Clique aqui para baixar o documento](${downloadUrl})\n\n` +
-                        `📋 Nome do arquivo: ${downloadResult.fileName}`;
-                    }
-
-                    downloadUrlResponse = downloadUrl;
-                    fileNameResponse = downloadResult.fileName;
-                  } else if (downloadResult.pdfUrl) {
-                    // Fallback: Se não foi baixado mas tem URL do PDF (comportamento antigo)
-                    downloadUrlResponse = downloadResult.pdfUrl;
-                    fileNameResponse = `${
-                      downloadResult.documentType || "documento"
-                    }.pdf`;
-
-                    response =
-                      `✅ Documento encontrado!\n\n` +
-                      `📄 Veja o documento clicando no link abaixo:\n` +
-                      `${downloadResult.pdfUrl}\n\n` +
-                      `⚠️ **Atenção:** Esta URL pode expirar após alguns minutos devido à sessão do e-SAJ. ` +
-                      `Acesse o link o mais rápido possível.`;
-                  } else {
-                    response = `❌ Erro ao baixar documento: ${
-                      downloadResult.error || "Erro desconhecido"
-                    }`;
-                  }
-                } else {
-                  response = `❌ Erro ao localizar documento: ${
-                    downloadResult.error || "Erro desconhecido"
-                  }`;
-                }
-              } else if (intentResult.intention === UserIntent.QUERY_DOCUMENT) {
-                // QUERY_DOCUMENT - Pergunta sobre conteúdo de documento
-                console.log(
-                  `📄 Iniciando extração de texto do documento${
-                    intentResult.documentType
-                      ? ` (${intentResult.documentType})`
-                      : ""
-                  } do processo ${protocolNumber}...`
-                );
-                const textResult = await this.eSAJService.extractDocumentText(
-                  protocolNumber,
-                  intentResult.documentType || "documento",
-                  processResult.processPageUrl // Passar a URL da página de detalhes
-                );
-
-                if (!textResult.success || !textResult.text) {
-                  response = `❌ Erro ao extrair texto do documento: ${
-                    textResult.error || "Erro desconhecido"
-                  }`;
-                } else {
-                  console.log(
-                    `✅ Texto extraído (${textResult.text.length} caracteres). Respondendo pergunta com LLM...`
-                  );
-                  try {
-                    // Usar a mensagem original do usuário como pergunta
-                    const answer = await this.llmService.answerDocumentQuestion(
-                      message.trim(), // Pergunta original do usuário
-                      textResult.text,
-                      textResult.documentType,
-                      protocolNumber
-                    );
-                    response = `📄 Resposta sobre o documento${
-                      textResult.documentType
-                        ? ` (${textResult.documentType})`
-                        : ""
-                    } do processo ${protocolNumber}\n\n${answer}`;
-                  } catch (answerError: any) {
-                    console.error(
-                      `❌ Erro ao responder pergunta:`,
-                      answerError
-                    );
-                    response = `❌ Erro ao responder pergunta sobre o documento: ${
-                      answerError.message || "Erro desconhecido"
-                    }`;
-                  }
-                }
-              } else if (
-                intentResult.intention === UserIntent.SUMMARIZE_DOCUMENT
-              ) {
-                // SUMMARIZE_DOCUMENT - Resumo estruturado de um documento específico
-                console.log(
-                  `📄 Iniciando extração e resumo do documento${
-                    intentResult.documentType
-                      ? ` (${intentResult.documentType})`
-                      : ""
-                  } do processo ${protocolNumber}...`
-                );
-                const textResult = await this.eSAJService.extractDocumentText(
-                  protocolNumber,
-                  intentResult.documentType || "documento",
-                  processResult.processPageUrl // Passar a URL da página de detalhes
-                );
-
-                if (!textResult.success || !textResult.text) {
-                  response = `❌ Erro ao extrair texto do documento: ${
-                    textResult.error || "Erro desconhecido"
-                  }`;
-                } else {
-                  console.log(
-                    `✅ Texto extraído (${textResult.text.length} caracteres). Gerando resumo estruturado com LLM...`
-                  );
-                  try {
-                    const summary = await this.llmService.summarizeDocument(
-                      textResult.text,
-                      textResult.documentType || intentResult.documentType,
-                      protocolNumber
-                    );
-                    response = `📄 Resumo do Documento${
-                      textResult.documentType
-                        ? ` (${textResult.documentType})`
-                        : ""
-                    } do Processo ${protocolNumber}\n\n${summary}`;
-                  } catch (summaryError: any) {
-                    console.error(
-                      `❌ Erro ao gerar resumo do documento:`,
-                      summaryError
-                    );
-                    response = `❌ Erro ao gerar resumo do documento: ${
-                      summaryError.message || "Erro desconhecido"
-                    }`;
-                  }
-                }
-              } else {
-                // SUMMARIZE_PROCESS
-                console.log(
-                  `📋 Iniciando extração de movimentações do processo ${protocolNumber}...`
-                );
-                try {
-                  // Usar o método orquestrador, reutilizando a página já aberta
-                  const movementsText =
-                    await this.eSAJService.getProcessMovementsForSummary(
-                      protocolNumber,
-                      processResult.processPageUrl, // Passar URL para evitar busca duplicada
-                      processResult.page // Passar página para reutilizar
-                    );
-
-                  if (!movementsText || movementsText.trim().length === 0) {
-                    response = `❌ Erro ao extrair movimentações do processo: Nenhuma movimentação encontrada.`;
-                  } else {
-                    console.log(
-                      `✅ Movimentações extraídas (${movementsText.length} caracteres). Gerando resumo com LLM...`
-                    );
-                    try {
-                      const summary = await this.llmService.summarizeProcess(
-                        movementsText
-                      );
-                      response = `📋 Resumo do Processo ${protocolNumber}\n\n${summary}`;
-                    } catch (summaryError: any) {
-                      console.error(`❌ Erro ao gerar resumo:`, summaryError);
-                      response = `❌ Erro ao gerar resumo do processo: ${
-                        summaryError.message || "Erro desconhecido"
-                      }`;
-                    }
-                  }
-                } catch (extractionError: any) {
-                  console.error(
-                    `❌ Erro ao extrair movimentações:`,
-                    extractionError
-                  );
-                  response = `❌ Erro ao extrair movimentações do processo: ${
-                    extractionError.message || "Erro desconhecido"
-                  }`;
-                }
-              }
-            }
-          }
-          break;
-
-        case UserIntent.RAG_QUERY:
-          // Usar RAG para responder
-          if (this.ragChainService) {
-            try {
-              const isRAGAvailable = await this.ragChainService.isAvailable();
-
-              if (isRAGAvailable) {
-                console.log("🔍 Usando RAG para responder...");
-                const ragResult = await this.ragChainService.query(
-                  message.trim()
-                );
-                response = ragResult.answer;
-                sources = ragResult.sources;
-              } else {
-                console.log(
-                  "⚠️  RAG não disponível (sem documentos indexados). Usando LLM direto..."
-                );
-                response = await this.llmService.generateResponse(
-                  message.trim()
-                );
-              }
-            } catch (ragError: any) {
-              console.error("Erro ao usar RAG, usando LLM direto:", ragError);
-              response = await this.llmService.generateResponse(message.trim());
-            }
-          } else {
-            console.log("⚠️  RAG não configurado. Usando LLM direto...");
-            response = await this.llmService.generateResponse(message.trim());
-          }
-          break;
-
-        case UserIntent.GENERAL_QUERY:
-        default:
-          // Se não há número de protocolo, tentar RAG primeiro (pode ser pergunta sobre base de conhecimento)
-          if (!protocolNumber && this.ragChainService) {
-            try {
-              const isRAGAvailable = await this.ragChainService.isAvailable();
-
-              if (isRAGAvailable) {
-                console.log(
-                  "🔍 Tentando RAG para pergunta genérica (pode estar na base de conhecimento)..."
-                );
-                const ragResult = await this.ragChainService.query(
-                  message.trim()
-                );
-                response = ragResult.answer;
-                sources = ragResult.sources;
-                // Atualizar intenção para RAG_QUERY se funcionou
-                intentResult.intention = UserIntent.RAG_QUERY;
-              } else {
-                console.log(
-                  "💬 RAG não disponível. Usando LLM direto para pergunta genérica..."
-                );
-                response = await this.llmService.generateResponse(
-                  message.trim()
-                );
-              }
-            } catch (ragError: any) {
-              console.log(
-                "💬 Erro ao usar RAG, usando LLM direto para pergunta genérica:",
-                ragError.message
-              );
-              response = await this.llmService.generateResponse(message.trim());
-            }
-          } else {
-            // Usar LLM direto para perguntas genéricas
-            console.log("💬 Usando LLM direto para pergunta genérica...");
-            response = await this.llmService.generateResponse(message.trim());
-          }
-          break;
-      }
-
-      const chatResponse: ChatMessageResponse = {
-        message: message.trim(),
-        response: response,
-        timestamp: new Date().toISOString(),
-        intention: intentResult.intention,
-        protocolNumber: protocolNumber,
-        documentType: intentResult.documentType,
-        downloadUrl: downloadUrlResponse,
-        fileName: fileNameResponse,
-        sources: sources,
-      };
+      // Construir resposta final
+      const chatResponse = ResponseBuilder.createChatResponse(
+        message,
+        result.response,
+        intentResult.intention,
+        intentResult.protocolNumber,
+        intentResult.documentType,
+        result.downloadUrl,
+        result.fileName,
+        result.sources
+      );
 
       return res.status(200).json(chatResponse);
     } catch (error: any) {
-      console.error("Erro ao processar requisição de chat:", error);
+      return this.handleError(res, error);
+    }
+  }
 
-      // Erro 401 - Autenticação falhou
-      if (error.message?.includes("AUTENTICACAO_FALHOU")) {
-        return res.status(401).json({
-          error: "Falha na autenticação",
-          message: error.message,
-          details: {
-            solution:
-              "Verifique se sua API key está correta e é do OpenRouter (deve começar com 'sk-or-v1-'). " +
-              "Obtenha uma chave gratuita em: https://openrouter.ai/keys",
-            documentation: "https://openrouter.ai/docs",
-          },
-        });
-      }
+  /**
+   * Trata erros do chat
+   */
+  private handleError(res: Response, error: any): Response {
+    console.error("Erro ao processar requisição de chat:", error);
 
-      // Erro 429 - Quota excedida
-      if (error.message?.includes("QUOTA_EXCEDIDA")) {
-        return res.status(429).json({
-          error: "Cota da API excedida",
-          message: error.message,
-          details: {
-            solution:
-              "Verifique seu plano e adicione créditos em: https://platform.openai.com/account/billing",
-            documentation:
-              "https://platform.openai.com/docs/guides/error-codes/api-errors",
-          },
-        });
-      }
+    // Erro 401 - Autenticação falhou
+    if (error.message?.includes("AUTENTICACAO_FALHOU")) {
+      return res.status(401).json({
+        error: "Falha na autenticação",
+        message: error.message,
+        details: {
+          solution:
+            "Verifique se sua API key está correta e é do OpenRouter (deve começar com 'sk-or-v1-'). " +
+            "Obtenha uma chave gratuita em: https://openrouter.ai/keys",
+          documentation: "https://openrouter.ai/docs",
+        },
+      });
+    }
 
-      // Erros específicos da API do OpenAI
-      if (error.message?.includes("API do OpenAI")) {
-        return res.status(502).json({
-          error: "Erro na comunicação com o serviço de IA",
-          message: error.message,
-        });
-      }
+    // Erro 429 - Quota excedida
+    if (error.message?.includes("QUOTA_EXCEDIDA")) {
+      return res.status(429).json({
+        error: "Cota da API excedida",
+        message: error.message,
+        details: {
+          solution:
+            "Verifique seu plano e adicione créditos em: https://platform.openai.com/account/billing",
+          documentation:
+            "https://platform.openai.com/docs/guides/error-codes/api-errors",
+        },
+      });
+    }
 
-      return res.status(500).json({
-        error: "Erro interno do servidor ao processar a mensagem",
+    // Erros específicos da API do OpenAI
+    if (error.message?.includes("API do OpenAI")) {
+      return res.status(502).json({
+        error: "Erro na comunicação com o serviço de IA",
         message: error.message,
       });
     }
+
+    return res.status(500).json({
+      error: "Erro interno do servidor ao processar a mensagem",
+      message: error.message,
+    });
   }
 
   /**
@@ -643,9 +193,11 @@ export class ChatController {
     try {
       const { fileName } = req.params;
 
-      if (!fileName) {
-        return res.status(400).json({
-          error: "Nome do arquivo não fornecido",
+      // Validação
+      const validation = RequestValidator.validateFileDownload(fileName);
+      if (!validation.isValid) {
+        return res.status(validation.statusCode!).json({
+          error: validation.error,
         });
       }
 
@@ -734,293 +286,56 @@ export class ChatController {
     try {
       const { message }: ChatMessageRequest = req.body;
 
-      // Validação básica
-      if (
-        !message ||
-        typeof message !== "string" ||
-        message.trim().length === 0
-      ) {
-        res.status(400).json({
-          error:
-            "Campo 'message' é obrigatório e deve ser uma string não vazia",
+      // Validação
+      const validation = RequestValidator.validateChatMessage(req);
+      if (!validation.isValid) {
+        res.status(validation.statusCode!).json({
+          error: validation.error,
         });
         return;
       }
 
-      // Limitar tamanho da mensagem
-      if (message.length > 2000) {
-        res.status(400).json({
-          error: "Mensagem muito longa. Máximo de 2000 caracteres permitido",
-        });
-        return;
-      }
+      // Configurar headers SSE
+      SSEHelper.setupHeaders(res);
 
-      // Configurar SSE headers
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.setHeader("X-Accel-Buffering", "no"); // Desabilitar buffering do nginx
-      res.flushHeaders();
-
-      // Função helper para enviar eventos SSE
-      const sendEvent = (data: any) => {
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
-      };
-
-      // 1. Detectar intenção
-      sendEvent({
-        type: "progress",
-        status: "intent_detection",
-        message: "🧠 Analisando sua mensagem e detectando a intenção...",
-      });
+      // Detectar intenção
+      SSEHelper.sendProgress(
+        res,
+        "intent_detection",
+        "🧠 Analisando sua mensagem e detectando a intenção..."
+      );
 
       const intentResult = await this.intentDetectionService.detectIntent(
         message.trim()
       );
 
-      let response: string;
-      let sources: ChatMessageResponse["sources"] = undefined;
-      let protocolNumber: string | undefined = intentResult.protocolNumber;
-      let downloadUrlResponse: string | undefined = undefined;
-      let fileNameResponse: string | undefined = undefined;
+      // Rotear com callback de progresso SSE
+      const progressCallback = SSEHelper.createESAJProgressCallback(res);
 
-      // 2. Rotear baseado na intenção
-      switch (intentResult.intention) {
-        case UserIntent.RAG_QUERY:
-          // Busca com RAG
-          sendEvent({
-            type: "progress",
-            status: "rag",
-            message: "📚 Buscando informações na base de conhecimento...",
-          });
-
-          if (this.ragChainService) {
-            const ragResult = await this.ragChainService.query(message.trim());
-            response = ragResult.answer;
-            sources = ragResult.sources;
-          } else {
-            response =
-              "⚠️ Sistema de busca por documentos não está configurado. " +
-              "Por favor, configure o Qdrant para habilitar esta funcionalidade.";
-          }
-          break;
-
-        case UserIntent.QUERY_DOCUMENT:
-        case UserIntent.DOWNLOAD_DOCUMENT:
-        case UserIntent.SUMMARIZE_PROCESS:
-        case UserIntent.SUMMARIZE_DOCUMENT:
-          // Verificar se há número de protocolo
-          if (!protocolNumber) {
-            response =
-              "Não foi possível identificar o número do protocolo na sua mensagem. " +
-              "Por favor, forneça o número do processo no formato: NNNNNNN-DD.AAAA.J.TR.OOOO";
-          } else {
-            // Buscar processo no e-SAJ
-            sendEvent({
-              type: "progress",
-              status: "esaj_search",
-              message: `🔍 Conectando ao portal e-SAJ e buscando o processo ${protocolNumber}...`,
-            });
-
-            let processResult;
-            try {
-              // Criar callback de progresso para enviar atualizações via SSE
-              const progressCallback = (update: any) => {
-                const statusMap: any = {
-                  init: "esaj_search",
-                  connecting: "esaj_search",
-                  searching: "esaj_search",
-                  navigating: "esaj_processing",
-                  finding_document: "esaj_processing",
-                  downloading: "esaj_download",
-                  extracting: "esaj_processing",
-                  processing: "esaj_processing",
-                };
-
-                sendEvent({
-                  type: "progress",
-                  status: statusMap[update.stage] || "loading",
-                  message: update.message,
-                  progress: update.progress,
-                });
-              };
-
-              processResult = await this.eSAJService.findProcess(
-                protocolNumber,
-                progressCallback
-              );
-            } catch (esajError: any) {
-              console.error("❌ Erro ao acessar e-SAJ:", esajError.message);
-              response =
-                `❌ Erro ao buscar processo no e-SAJ: ${esajError.message}. ` +
-                "Por favor, tente novamente mais tarde.";
-              processResult = { found: false, error: esajError.message };
-            }
-
-            if (!processResult.found) {
-              response =
-                `Processo ${protocolNumber} não foi encontrado no portal e-SAJ. ` +
-                (processResult.error
-                  ? `Erro: ${processResult.error}`
-                  : "Verifique se o número do protocolo está correto.");
-            } else {
-              // Processo encontrado - realizar ação solicitada
-              if (intentResult.intention === UserIntent.DOWNLOAD_DOCUMENT) {
-                sendEvent({
-                  type: "progress",
-                  status: "esaj_download",
-                  message: `📥 Acessando a pasta digital e baixando o documento...`,
-                });
-
-                const downloadResult = await this.eSAJService.downloadDocument(
-                  protocolNumber,
-                  intentResult.documentType || "documento",
-                  processResult.processPageUrl,
-                  processResult.page
-                );
-
-                if (
-                  downloadResult.success &&
-                  downloadResult.filePath &&
-                  downloadResult.fileName
-                ) {
-                  let googleDriveFileId: string | undefined;
-                  let googleDriveViewLink: string | undefined;
-                  let finalFilePath = downloadResult.filePath;
-
-                  if (this.googleDriveService.isConfigured()) {
-                    sendEvent({
-                      type: "progress",
-                      status: "esaj_processing",
-                      message: `📤 Enviando documento para o Google Drive...`,
-                    });
-
-                    const driveResult =
-                      await this.googleDriveService.uploadFile(
-                        downloadResult.filePath,
-                        downloadResult.fileName
-                      );
-
-                    if (driveResult) {
-                      googleDriveFileId = driveResult.fileId;
-                      googleDriveViewLink = driveResult.webViewLink;
-                    }
-                  }
-
-                  // Construir URL de download
-                  const host = req.get("host") || "";
-                  const protocol =
-                    req.protocol === "https" ||
-                    req.get("x-forwarded-proto") === "https" ||
-                    process.env.FORCE_HTTPS === "true"
-                      ? "https"
-                      : req.protocol;
-                  const baseUrl = `${protocol}://${host}`;
-
-                  downloadUrlResponse =
-                    googleDriveViewLink ||
-                    `${baseUrl}/chat/download/${encodeURIComponent(
-                      downloadResult.fileName
-                    )}`;
-                  fileNameResponse = downloadResult.fileName;
-
-                  response =
-                    `✅ Documento baixado com sucesso!\n\n` +
-                    `📋 Nome do arquivo: ${downloadResult.fileName}\n` +
-                    `📄 Tipo: ${downloadResult.documentType}\n` +
-                    (googleDriveViewLink
-                      ? `\n🔗 Link do Google Drive: ${googleDriveViewLink}\n`
-                      : `\n[📥 Clique aqui para baixar](${downloadUrlResponse})`);
-                } else {
-                  response =
-                    downloadResult.error ||
-                    "Não foi possível baixar o documento solicitado.";
-                }
-              } else {
-                // Outras operações (SUMMARIZE_PROCESS, etc.)
-                sendEvent({
-                  type: "progress",
-                  status: "esaj_processing",
-                  message: `📄 Extraindo informações do processo...`,
-                });
-
-                const movementsText =
-                  await this.eSAJService.getProcessMovementsForSummary(
-                    protocolNumber,
-                    processResult.processPageUrl,
-                    processResult.page
-                  );
-
-                sendEvent({
-                  type: "progress",
-                  status: "llm_processing",
-                  message: `🤔 Gerando resposta com base nas informações do processo...`,
-                });
-
-                const summaryPrompt =
-                  `Você é um assistente jurídico especializado. Com base nas movimentações do processo abaixo, forneça uma resposta clara e objetiva.\n\n` +
-                  `Movimentações do Processo ${protocolNumber}:\n${movementsText}\n\n` +
-                  `Pergunta do usuário: ${message.trim()}\n\n` +
-                  `Forneça uma resposta estruturada e profissional.`;
-
-                response = await this.llmService.generateResponse(
-                  summaryPrompt
-                );
-              }
-            }
-          }
-          break;
-
-        case UserIntent.GENERAL_QUERY:
-        default:
-          sendEvent({
-            type: "progress",
-            status: "llm_processing",
-            message: "💭 Processando sua pergunta...",
-          });
-
-          if (this.ragChainService) {
-            const ragResult = await this.ragChainService.query(message.trim());
-            response = ragResult.answer;
-            sources = ragResult.sources;
-          } else {
-            response = await this.llmService.generateResponse(message.trim());
-          }
-          break;
-      }
+      const result = await this.intentRouter.route(
+        intentResult,
+        message.trim(),
+        req,
+        progressCallback
+      );
 
       // Enviar resposta final
-      sendEvent({
-        type: "complete",
-        status: "complete",
-        message: "✅ Concluído!",
-        data: {
-          message: message.trim(),
-          response: response,
-          timestamp: new Date().toISOString(),
-          intention: intentResult.intention,
-          protocolNumber: protocolNumber,
-          documentType: intentResult.documentType,
-          downloadUrl: downloadUrlResponse,
-          fileName: fileNameResponse,
-          sources: sources,
-        },
-      });
+      const chatResponse = ResponseBuilder.createChatResponse(
+        message,
+        result.response,
+        intentResult.intention,
+        intentResult.protocolNumber,
+        intentResult.documentType,
+        result.downloadUrl,
+        result.fileName,
+        result.sources
+      );
 
+      SSEHelper.sendComplete(res, chatResponse);
       res.end();
     } catch (error: any) {
       console.error("Erro ao processar requisição de chat SSE:", error);
-
-      // Enviar evento de erro
-      res.write(
-        `data: ${JSON.stringify({
-          type: "error",
-          status: "error",
-          message: "❌ Erro ao processar sua solicitação",
-          error: error.message,
-        })}\n\n`
-      );
-
+      SSEHelper.sendError(res, error.message);
       res.end();
     }
   }
