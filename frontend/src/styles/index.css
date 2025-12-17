@@ -2,41 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Customização dos Toasts do React-Toastify */
+:root {
+  --toastify-color-light: hsl(var(--background));
+  --toastify-color-dark: hsl(var(--background));
+  --toastify-color-info: hsl(var(--primary));
+  --toastify-color-success: hsl(161.86 100% 24%); /* Verde para sucesso */
+  --toastify-color-warning: hsl(44.37 100% 47%); /* Amarelo para aviso */
+  --toastify-color-error: hsl(var(--destructive));
+  --toastify-color-transparent: rgba(255, 255, 255, 0.7);
+
+  --toastify-text-color-light: hsl(var(--foreground));
+  --toastify-text-color-dark: hsl(var(--foreground));
+
+  --toastify-icon-color-info: var(--toastify-color-info);
+  --toastify-icon-color-success: var(--toastify-color-success);
+  --toastify-icon-color-warning: var(--toastify-color-warning);
+  --toastify-icon-color-error: var(--toastify-color-error);
+
+  --toastify-toast-background: hsl(var(--card));
+  --toastify-toast-min-height: 64px;
+  --toastify-toast-max-height: 800px;
+  --toastify-font-family: inherit;
+  --toastify-z-index: 9999;
+}
+
+.dark {
+  --toastify-color-light: hsl(var(--background));
+  --toastify-color-dark: hsl(var(--background));
+  --toastify-text-color-light: hsl(var(--foreground));
+  --toastify-text-color-dark: hsl(var(--foreground));
+  --toastify-toast-background: hsl(var(--card));
+}
+
+/* Estilos customizados para os toasts */
+.Toastify__toast {
+  border-radius: var(--radius);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid hsl(var(--border));
+}
+
+.Toastify__toast--success {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.Toastify__toast--error {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.Toastify__toast--info {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.Toastify__toast--warning {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.Toastify__progress-bar {
+  background: hsl(var(--primary));
+}
+
+.Toastify__progress-bar--success {
+  background: hsl(161.86 100% 24%);
+}
+
+.Toastify__progress-bar--error {
+  background: hsl(var(--destructive));
+}
+
+.Toastify__close-button {
+  color: hsl(var(--foreground));
+  opacity: 0.5;
+}
+
+.Toastify__close-button:hover {
+  opacity: 1;
+}
+
 @layer base {
   :root {
     /* Base */
-    --background: 210 20% 97%;        /* #F6F8FA */
-    --foreground: 215 28% 17%;        /* #1F2937 */
+    --background: 210 20% 97%; /* #F6F8FA */
+    --foreground: 215 28% 17%; /* #1F2937 */
 
-    --card: 0 0% 100%;               /* #FFFFFF */
-    --card-foreground: 215 28% 17%;  /* #1F2937 */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 215 28% 17%; /* #1F2937 */
 
     --popover: 0 0% 100%;
     --popover-foreground: 215 28% 17%;
 
     /* Primary — oklch(38.6% 0.063 188.416) */
-    --primary: 188 34% 27%;           /* ~ verde-petróleo jurídico */
+    --primary: 188 34% 27%; /* ~ verde-petróleo jurídico */
     --primary-foreground: 210 40% 98%; /* #F8FAFC */
 
     /* Secondary / Muted */
-    --secondary: 210 16% 93%;         /* #ECEFF3 */
+    --secondary: 210 16% 93%; /* #ECEFF3 */
     --secondary-foreground: 215 25% 27%; /* #374151 */
 
     --muted: 210 16% 93%;
-    --muted-foreground: 215 14% 45%;  /* #6B7280 */
+    --muted-foreground: 215 14% 45%; /* #6B7280 */
 
     /* Accent */
     --accent: 210 16% 93%;
     --accent-foreground: 215 25% 27%;
 
     /* Feedback */
-    --destructive: 0 65% 48%;         /* #DC2626 */
+    --destructive: 355.94 91% 33%; /* #9f0712 */
     --destructive-foreground: 210 40% 98%;
 
     /* UI */
-    --border: 210 16% 88%;            /* #E5E7EB */
+    --border: 210 16% 88%; /* #E5E7EB */
     --input: 210 16% 88%;
-    --ring: 188 34% 27%;              /* mesma primária */
+    --ring: 188 34% 27%; /* mesma primária */
 
     --radius: 0.5rem;
 
@@ -63,32 +145,32 @@
 
   .dark {
     /* Base */
-    --background: 215 28% 12%;        /* #111827 */
-    --foreground: 210 40% 98%;        /* #F8FAFC */
+    --background: 215 28% 12%; /* #111827 */
+    --foreground: 210 40% 98%; /* #F8FAFC */
 
-    --card: 215 28% 14%;              /* #1F2933 */
+    --card: 215 28% 14%; /* #1F2933 */
     --card-foreground: 210 40% 98%;
 
     --popover: 215 28% 14%;
     --popover-foreground: 210 40% 98%;
 
     /* Primary */
-    --primary: 188 34% 35%;           /* versão mais clara no dark */
+    --primary: 188 34% 35%; /* versão mais clara no dark */
     --primary-foreground: 210 40% 98%;
 
     /* Secondary / Muted */
-    --secondary: 215 25% 18%;         /* #1F2937 */
+    --secondary: 215 25% 18%; /* #1F2937 */
     --secondary-foreground: 210 40% 98%;
 
     --muted: 215 25% 18%;
-    --muted-foreground: 215 15% 65%;  /* #9CA3AF */
+    --muted-foreground: 215 15% 65%; /* #9CA3AF */
 
     /* Accent */
     --accent: 215 25% 18%;
     --accent-foreground: 210 40% 98%;
 
     /* Feedback */
-    --destructive: 0 55% 40%;         /* #B91C1C */
+    --destructive: 355.94 91% 33%; /* #9f0712 */
     --destructive-foreground: 210 40% 98%;
 
     /* UI */

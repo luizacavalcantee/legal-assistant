@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "react-toastify";
 import {
   Document,
   CreateDocumentDto,
@@ -9,15 +10,13 @@ import { documentService } from "../services/api";
 import { DocumentTable } from "../components/DocumentTable";
 import { DocumentForm } from "../components/DocumentForm";
 import { Button } from "../components/ui/button";
-import { Plus, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus } from "lucide-react";
 
 export function KnowledgeBasePage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingDocument, setEditingDocument] = useState<Document | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
@@ -27,12 +26,11 @@ export function KnowledgeBasePage() {
     if (showLoading) {
       setIsLoading(true);
     }
-    setError(null);
     try {
       const data = await documentService.getAll();
       setDocuments(data);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Erro ao carregar documentos");
+      toast.error(err.response?.data?.error || "Erro ao carregar documentos");
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -83,14 +81,12 @@ export function KnowledgeBasePage() {
   ) => {
     try {
       await documentService.create(data as CreateDocumentDto, file);
-      setSuccessMessage(
-        "Documento criado com sucesso! Aguardando indexação..."
-      );
+      toast.success("Documento criado com sucesso! Aguardando indexação...");
       setShowForm(false);
       await loadDocuments();
       // O polling será iniciado automaticamente pelo useEffect se houver documentos pendentes
-      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
+      toast.error(err.response?.data?.error || "Erro ao criar documento");
       throw err;
     }
   };
@@ -104,12 +100,12 @@ export function KnowledgeBasePage() {
         editingDocument.id,
         data as UpdateDocumentDto
       );
-      setSuccessMessage("Documento atualizado com sucesso!");
+      toast.success("Documento atualizado com sucesso!");
       setShowForm(false);
       setEditingDocument(null);
       await loadDocuments();
-      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
+      toast.error(err.response?.data?.error || "Erro ao atualizar documento");
       throw err;
     }
   };
@@ -118,12 +114,10 @@ export function KnowledgeBasePage() {
   const handleDelete = async (id: string) => {
     try {
       await documentService.delete(id);
-      setSuccessMessage("Documento removido com sucesso!");
+      toast.success("Documento removido com sucesso!");
       await loadDocuments();
-      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Erro ao remover documento");
-      setTimeout(() => setError(null), 5000);
+      toast.error(err.response?.data?.error || "Erro ao remover documento");
     }
   };
 
@@ -149,7 +143,7 @@ export function KnowledgeBasePage() {
 
   return (
     <div className="h-full bg-background overflow-y-auto">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto px-4 py-8 max-w-7xl h-full">
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-normal tracking-tight text-foreground">
@@ -172,20 +166,6 @@ export function KnowledgeBasePage() {
             </Button>
           </div>
         </header>
-
-        {successMessage && (
-          <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 flex items-center gap-2 text-green-800">
-            <CheckCircle2 className="h-5 w-5" />
-            <span className="text-sm font-medium">{successMessage}</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 flex items-center gap-2 text-red-800">
-            <AlertCircle className="h-5 w-5" />
-            <span className="text-sm font-medium">{error}</span>
-          </div>
-        )}
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">

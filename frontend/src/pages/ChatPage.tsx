@@ -1,22 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import { toast } from "react-toastify";
 import { ChatMessage } from "../types/chat.types";
 import { chatService, default as api } from "../services/api";
 import { MessageList } from "../components/MessageList";
 import { MessageInput } from "../components/MessageInput";
-import { AlertCircle } from "lucide-react";
-import { 
-  getChatSession, 
+import {
+  getChatSession,
   updateChatSession,
   createChatSession,
-  addChatSession
+  addChatSession,
 } from "../utils/chatStorage";
 
 export function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const statusMessageIdRef = useRef<string | null>(null);
 
@@ -52,13 +51,13 @@ export function ChatPage() {
       setMessages([]);
       messagesToSaveRef.current = [];
     }
-    
+
     // Marcar que terminamos de mudar de chat após um pequeno delay
     // Isso garante que qualquer salvamento pendente seja cancelado
     setTimeout(() => {
       isChangingChatRef.current = false;
     }, 100);
-    
+
     isInitialMount.current = false;
   }, [chatId]);
 
@@ -68,7 +67,7 @@ export function ChatPage() {
     if (isChangingChatRef.current) {
       return;
     }
-    
+
     // Só salvar se:
     // 1. Há um chatId válido
     // 2. O chatId atual corresponde ao que está sendo salvo
@@ -76,14 +75,14 @@ export function ChatPage() {
     // 4. As mensagens são diferentes das que já foram salvas (evitar loops)
     // 5. Não estamos no mount inicial sem mensagens
     if (
-      chatId && 
-      currentChatIdRef.current === chatId && 
+      chatId &&
+      currentChatIdRef.current === chatId &&
       messages.length > 0 &&
       JSON.stringify(messages) !== JSON.stringify(messagesToSaveRef.current)
     ) {
       // Atualizar referência das mensagens salvas
       messagesToSaveRef.current = messages;
-      
+
       const session = getChatSession(chatId);
       if (session) {
         // Sessão já existe, apenas atualizar
@@ -121,16 +120,18 @@ export function ChatPage() {
     if (match) {
       return match[0];
     }
-    
+
     // Se não encontrar URL completa, procurar por URL relativa
     const relativePattern = /\/download\/file\/([^\s\n\)]+)/;
     const relativeMatch = text.match(relativePattern);
     if (relativeMatch) {
       // Construir URL completa usando a baseURL da API
-      const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+      const apiUrl =
+        import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+        "http://localhost:3000";
       return `${apiUrl}${relativeMatch[0]}`;
     }
-    
+
     return null;
   };
 
@@ -139,22 +140,27 @@ export function ChatPage() {
     try {
       console.log("📥 Iniciando download:", url);
       console.log("📋 Nome do arquivo:", fileName);
-      
+
       // Se a URL é relativa, construir URL completa
       let fullUrl = url;
       if (url.startsWith("/")) {
-        const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+        const apiUrl =
+          import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+          "http://localhost:3000";
         fullUrl = `${apiUrl}${url}`;
       }
-      
+
       // Garantir que a URL use HTTPS se o frontend estiver em HTTPS
-      if (window.location.protocol === "https:" && fullUrl.startsWith("http://")) {
+      if (
+        window.location.protocol === "https:" &&
+        fullUrl.startsWith("http://")
+      ) {
         fullUrl = fullUrl.replace("http://", "https://");
         console.log("🔒 Convertendo URL para HTTPS:", fullUrl);
       }
-      
+
       console.log("🔗 URL completa:", fullUrl);
-      
+
       // Usar axios para fazer o download (já tem baseURL configurada)
       const response = await api.get(fullUrl, {
         responseType: "blob",
@@ -162,17 +168,17 @@ export function ChatPage() {
 
       const blob = response.data;
       console.log("📦 Blob criado, tamanho:", blob.size, "bytes");
-      
+
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.download = fileName;
       link.style.display = "none";
       document.body.appendChild(link);
-      
+
       console.log("🖱️  Clicando no link de download...");
       link.click();
-      
+
       // Aguardar um pouco antes de remover para garantir que o download inicie
       setTimeout(() => {
         document.body.removeChild(link);
@@ -185,16 +191,21 @@ export function ChatPage() {
       try {
         let fullUrl = url;
         if (url.startsWith("/")) {
-          const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+          const apiUrl =
+            import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+            "http://localhost:3000";
           fullUrl = `${apiUrl}${url}`;
         }
-        
+
         // Garantir que a URL use HTTPS se o frontend estiver em HTTPS
-        if (window.location.protocol === "https:" && fullUrl.startsWith("http://")) {
+        if (
+          window.location.protocol === "https:" &&
+          fullUrl.startsWith("http://")
+        ) {
           fullUrl = fullUrl.replace("http://", "https://");
           console.log("🔒 Convertendo URL para HTTPS no fallback:", fullUrl);
         }
-        
+
         console.log("🔄 Tentando fallback com fetch:", fullUrl);
         const response = await fetch(fullUrl);
         if (!response.ok) {
@@ -215,7 +226,13 @@ export function ChatPage() {
         console.log("✅ Download concluído via fallback:", fileName);
       } catch (fallbackError: any) {
         console.error("❌ Erro no fallback de download:", fallbackError);
-        alert(`Erro ao baixar arquivo: ${fallbackError.message}`);
+        toast.error(
+          `Erro ao baixar arquivo: ${
+            fallbackError.message ||
+            "Não foi possível baixar o arquivo. Tente novamente."
+          }`
+        );
+        // Não re-throw aqui, pois o erro já foi mostrado ao usuário via toast
       }
     }
   };
@@ -240,7 +257,7 @@ export function ChatPage() {
   const addStatusMessage = (status: ChatMessage["status"], content: string) => {
     const statusId = `status-${Date.now()}`;
     statusMessageIdRef.current = statusId;
-    
+
     const statusMessage: ChatMessage = {
       id: statusId,
       role: "assistant",
@@ -285,7 +302,6 @@ export function ChatPage() {
 
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
-    setError(null);
 
     // Adicionar mensagem de status inicial mais descritiva
     const initialStatusId = addStatusMessage(
@@ -295,12 +311,15 @@ export function ChatPage() {
 
     // Atualizar mensagem após alguns segundos para mostrar progresso
     const progressInterval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - parseInt(initialStatusId.split("-")[1])) / 1000);
+      const elapsed = Math.floor(
+        (Date.now() - parseInt(initialStatusId.split("-")[1])) / 1000
+      );
       if (elapsed > 3 && statusMessageIdRef.current === initialStatusId) {
         replaceStatusMessage(initialStatusId, {
           id: initialStatusId,
           role: "assistant",
-          content: "⏳ Processando sua solicitação... Isso pode levar alguns segundos.",
+          content:
+            "⏳ Processando sua solicitação... Isso pode levar alguns segundos.",
           timestamp: new Date().toISOString(),
           status: "loading",
         });
@@ -345,7 +364,7 @@ export function ChatPage() {
             "esaj_search",
             `🔍 Buscando processo ${response.protocolNumber} no portal e-SAJ...\n\n⏳ Isso pode levar até 1 minuto. Por favor, aguarde.`
           );
-          
+
           // Atualizar mensagem após alguns segundos para mostrar progresso
           setTimeout(() => {
             if (statusId && statusMessageIdRef.current === statusId) {
@@ -358,7 +377,7 @@ export function ChatPage() {
               });
             }
           }, 10000);
-          
+
           setTimeout(() => {
             if (statusId && statusMessageIdRef.current === statusId) {
               replaceStatusMessage(statusId, {
@@ -391,17 +410,19 @@ export function ChatPage() {
         replaceStatusMessage(statusId, {
           id: statusId,
           role: "assistant",
-          content: "✅ Processo encontrado!\n\n📥 Acessando a pasta digital e preparando o download do documento...",
+          content:
+            "✅ Processo encontrado!\n\n📥 Acessando a pasta digital e preparando o download do documento...",
           timestamp: new Date().toISOString(),
           status: "esaj_download",
         });
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        
+
         // Atualizar para mostrar progresso do download
         replaceStatusMessage(statusId, {
           id: statusId,
           role: "assistant",
-          content: "✅ Processo encontrado!\n\n📥 Baixando documento do e-SAJ... Isso pode levar alguns segundos.",
+          content:
+            "✅ Processo encontrado!\n\n📥 Baixando documento do e-SAJ... Isso pode levar alguns segundos.",
           timestamp: new Date().toISOString(),
           status: "esaj_download",
         });
@@ -459,18 +480,30 @@ export function ChatPage() {
       let errorContent = "Desculpe, ocorreu um erro ao processar sua mensagem.";
       let errorDetails = "";
 
-      if (err.code === "ERR_NETWORK" || err.message?.includes("Network Error")) {
-        errorContent = "❌ Erro de conexão";
-        errorDetails = "Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.";
-      } else if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+      if (
+        err.code === "ERR_NETWORK" ||
+        err.message?.includes("Network Error")
+      ) {
+        errorContent = "Não foi possível conectar ao servidor. ";
+        errorDetails =
+          "Verifique sua conexão com a internet e tente novamente.";
+      } else if (
+        err.code === "ECONNABORTED" ||
+        err.message?.includes("timeout")
+      ) {
         errorContent = "⏳ Tempo de espera esgotado";
-        errorDetails = "A operação está demorando mais que o esperado. Isso pode acontecer com buscas no e-SAJ. Por favor, tente novamente.";
+        errorDetails =
+          "A operação está demorando mais que o esperado. Isso pode acontecer com buscas no e-SAJ. Por favor, tente novamente.";
       } else if (err.response?.status === 500) {
         errorContent = "⚠️ Erro no servidor";
-        errorDetails = err.response?.data?.error || err.response?.data?.message || "O servidor encontrou um erro ao processar sua solicitação. Tente novamente em alguns instantes.";
+        errorDetails =
+          err.response?.data?.error ||
+          err.response?.data?.message ||
+          "O servidor encontrou um erro ao processar sua solicitação. Tente novamente em alguns instantes.";
       } else if (err.response?.status === 404) {
         errorContent = "🔍 Recurso não encontrado";
-        errorDetails = "O endpoint solicitado não foi encontrado. Isso pode indicar um problema de configuração.";
+        errorDetails =
+          "O endpoint solicitado não foi encontrado. Isso pode indicar um problema de configuração.";
       } else if (err.response?.status === 403) {
         errorContent = "🔒 Acesso negado";
         errorDetails = "Você não tem permissão para realizar esta operação.";
@@ -484,7 +517,8 @@ export function ChatPage() {
         errorContent = "❌ Erro";
         errorDetails = err.message;
       } else {
-        errorDetails = "Por favor, tente novamente. Se o problema persistir, entre em contato com o suporte.";
+        errorDetails =
+          "Por favor, tente novamente. Se o problema persistir, entre em contato com o suporte.";
       }
 
       // Adicionar mensagem de erro ao histórico
@@ -497,7 +531,11 @@ export function ChatPage() {
       };
 
       setMessages((prev) => [...prev, errorMessage]);
-      setError(errorDetails);
+
+      // Mostrar toast de erro
+      toast.error(`${errorContent}\n\n${errorDetails}`, {
+        autoClose: 7000,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -505,23 +543,23 @@ export function ChatPage() {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Área de Mensagens */}
-      <div className="flex-1 overflow-hidden">
+      {/* Área de Mensagens - com scroll */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div className="h-full max-w-4xl mx-auto flex flex-col">
-          {error && (
-            <div className="mx-4 mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 flex items-center gap-2 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              <span>{error}</span>
-            </div>
-          )}
-
           <MessageList messages={messages} isLoading={isLoading} />
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Campo de Entrada */}
-      <MessageInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+      {/* Campo de Entrada - fixo na parte inferior */}
+      <div className="shrink-0 border-t bg-background">
+        <div className="max-w-4xl mx-auto">
+          <MessageInput
+            onSendMessage={handleSendMessage}
+            isLoading={isLoading}
+          />
+        </div>
+      </div>
     </div>
   );
 }

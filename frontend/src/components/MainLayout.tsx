@@ -39,11 +39,11 @@ export function MainLayout() {
   return (
     <SidebarProvider>
       <AppSidebar onChatSelect={handleChatSelect} onNewChat={handleNewChat} />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+      <SidebarInset className="flex flex-col h-screen">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <SidebarTrigger />
         </header>
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden min-h-0">
           <Outlet />
         </div>
       </SidebarInset>

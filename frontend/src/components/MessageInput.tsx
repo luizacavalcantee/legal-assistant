@@ -38,7 +38,7 @@ export function MessageInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="border-t bg-background p-4 flex gap-2"
+      className="bg-background p-4 flex gap-2"
     >
       <Input
         type="text"
