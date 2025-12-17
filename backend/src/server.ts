@@ -103,6 +103,31 @@ app.get("/health", (req: Request, res: Response) => {
   });
 });
 
+// Health check estendido para manter serviços aquecidos (evitar cold starts)
+app.get("/health/warm", async (req: Request, res: Response) => {
+  try {
+    // Verificar banco de dados
+    await prisma.$queryRaw`SELECT 1`;
+
+    res.status(200).json({
+      status: "OK",
+      message: "Servidor aquecido e pronto",
+      timestamp: new Date().toISOString(),
+      services: {
+        database: "ready",
+        api: "ready",
+      },
+    });
+  } catch (error: any) {
+    res.status(503).json({
+      status: "ERROR",
+      message: "Erro ao aquecer serviços",
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Swagger UI
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

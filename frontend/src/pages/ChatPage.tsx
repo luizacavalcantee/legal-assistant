@@ -395,12 +395,6 @@ export function ChatPage() {
         config: err.config,
       });
 
-      // Remover mensagem de status se existir
-      if (currentStatusId) {
-        removeStatusMessage(currentStatusId);
-        currentStatusId = null;
-      }
-
       // Determinar mensagem de erro mais descritiva
       let errorContent = "Desculpe, ocorreu um erro ao processar sua mensagem.";
       let errorDetails = "";
@@ -446,19 +440,27 @@ export function ChatPage() {
           "Por favor, tente novamente. Se o problema persistir, entre em contato com o suporte.";
       }
 
-      // Adicionar mensagem de erro ao histórico
+      // Se houver mensagem de status, substituí-la pela mensagem de erro
+      // Caso contrário, adicionar nova mensagem de erro
       const errorMessage: ChatMessage = {
-        id: `error-${Date.now()}`,
+        id: currentStatusId || `error-${Date.now()}`,
         role: "assistant",
         content: `${errorContent}\n\n${errorDetails}`,
         timestamp: new Date().toISOString(),
         isError: true,
       };
 
-      setMessages((prev) => [...prev, errorMessage]);
+      if (currentStatusId) {
+        // Substituir mensagem de status pela mensagem de erro
+        replaceStatusMessage(currentStatusId, errorMessage);
+        currentStatusId = null;
+      } else {
+        // Adicionar nova mensagem de erro
+        setMessages((prev) => [...prev, errorMessage]);
+      }
 
       // Mostrar toast de erro
-      toast.error(`${errorContent}\n\n${errorDetails}`, {
+      toast.error(`${errorContent}`, {
         autoClose: 7000,
       });
     } finally {
