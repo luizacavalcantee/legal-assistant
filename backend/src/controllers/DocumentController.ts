@@ -179,6 +179,11 @@ export class DocumentController {
     } catch (error: any) {
       console.error("Erro ao listar documentos:", error);
       console.error("Stack:", error?.stack);
+      console.error("Detalhes do erro:", {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+      });
       
       // Retornar mensagem de erro mais detalhada em desenvolvimento
       const errorMessage = process.env.NODE_ENV === 'production'

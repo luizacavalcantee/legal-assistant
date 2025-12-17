@@ -112,15 +112,8 @@ export class DocumentService {
     await this.repository.delete(id);
   }
 
-  private mapToResponse(document: {
-    id: string;
-    titulo: string;
-    caminho_arquivo: string;
-    status_indexacao: StatusIndexacao;
-    criado_em: Date;
-    google_drive_file_id?: string | null;
-    google_drive_view_link?: string | null;
-  }): DocumentResponse {
+  private mapToResponse(document: any): DocumentResponse {
+    // Usar 'any' para permitir campos opcionais que podem não existir no banco ainda
     return {
       id: document.id,
       titulo: document.titulo,
