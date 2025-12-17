@@ -7,6 +7,8 @@
     "dev": "npm run dev:clean-port && cross-env NODE_OPTIONS=--max-old-space-size=8192 ts-node-dev --respawn --transpile-only src/server.ts",
     "dev:clean-port": "node -e \"const { execSync } = require('child_process'); try { if (process.platform === 'win32') { const result = execSync('netstat -ano | findstr :3000', { encoding: 'utf8' }); const lines = result.split('\\n').filter(l => l.trim()); lines.forEach(line => { const match = line.match(/\\s+(\\d+)\\s*$/); if (match) { try { execSync(`taskkill /PID ${match[1]} /F`, { stdio: 'ignore' }); } catch (e) {} } }); } else { execSync('lsof -ti:3000 | xargs kill -9 2>/dev/null', { stdio: 'ignore' }); } } catch (e) {}\"",
     "build": "npm run prisma:generate && tsc",
+    "postinstall": "npx puppeteer browsers install chrome || echo 'Chrome installation skipped (may already be installed)'",
+    "install:chrome": "mkdir -p .cache/puppeteer && PUPPETEER_CACHE_DIR=.cache/puppeteer npx puppeteer browsers install chrome || echo 'Chrome installation skipped'",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -35,6 +37,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "googleapis": "^169.0.0",
     "langchain": "^1.2.0",
     "multer": "^2.0.2",
     "openai": "^6.10.0",
@@ -57,22 +60,5 @@
     "prisma": "^7.0.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"
-  },
-  "scripts": {
-    "dev": "npm run dev:clean-port && cross-env NODE_OPTIONS=--max-old-space-size=8192 ts-node-dev --respawn --transpile-only src/server.ts",
-    "dev:clean-port": "node -e \"const { execSync } = require('child_process'); try { if (process.platform === 'win32') { const result = execSync('netstat -ano | findstr :3000', { encoding: 'utf8' }); const lines = result.split('\\n').filter(l => l.trim()); lines.forEach(line => { const match = line.match(/\\s+(\\d+)\\s*$/); if (match) { try { execSync(`taskkill /PID ${match[1]} /F`, { stdio: 'ignore' }); } catch (e) {} } }); } else { execSync('lsof -ti:3000 | xargs kill -9 2>/dev/null', { stdio: 'ignore' }); } } catch (e) {}\"",
-    "build": "npm run prisma:generate && tsc",
-    "postinstall": "npx puppeteer browsers install chrome || echo 'Chrome installation skipped (may already be installed)'",
-    "install:chrome": "mkdir -p .cache/puppeteer && PUPPETEER_CACHE_DIR=.cache/puppeteer npx puppeteer browsers install chrome || echo 'Chrome installation skipped'",
-    "start": "node dist/server.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio --port 5555",
-    "prisma:reset": "prisma migrate reset",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f",
-    "setup": "npm install && npm run prisma:generate && npm run prisma:migrate"
   }
 }

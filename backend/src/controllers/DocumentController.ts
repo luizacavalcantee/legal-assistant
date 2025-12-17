@@ -1,13 +1,17 @@
 import { Request, Response } from "express";
 import { DocumentService } from "../services/DocumentService";
+import { GoogleDriveService } from "../services/GoogleDriveService";
 import { CreateDocumentDto, UpdateDocumentDto } from "../types/document.types";
 import * as path from "path";
+import * as fs from "fs";
 
 export class DocumentController {
   private service: DocumentService;
+  private googleDriveService: GoogleDriveService;
 
   constructor(service: DocumentService) {
     this.service = service;
+    this.googleDriveService = new GoogleDriveService();
   }
 
   /**
@@ -68,11 +72,42 @@ export class DocumentController {
       }
 
       let caminhoArquivo: string | undefined;
+      let filePathForIndexing: string | undefined;
 
-      // Se há arquivo enviado, usar o caminho absoluto do arquivo salvo
+      // Se há arquivo enviado
       if (file) {
-        // file.path já é o caminho completo retornado pelo multer
-        caminhoArquivo = path.resolve(file.path);
+        const localFilePath = path.resolve(file.path);
+        
+        // Tentar fazer upload para Google Drive se estiver configurado
+        if (this.googleDriveService.isConfigured()) {
+          try {
+            console.log("📤 Fazendo upload para Google Drive...");
+            const driveResult = await this.googleDriveService.uploadFile(
+              localFilePath,
+              file.originalname
+            );
+            
+            if (driveResult) {
+              // Salvar o fileId do Google Drive no banco
+              caminhoArquivo = `gdrive:${driveResult.fileId}`;
+              console.log(`✅ Arquivo enviado para Google Drive: ${driveResult.fileId}`);
+              console.log(`   Link de visualização: ${driveResult.webViewLink}`);
+            } else {
+              // Fallback para armazenamento local
+              caminhoArquivo = localFilePath;
+            }
+          } catch (driveError: any) {
+            console.error("❌ Erro ao fazer upload para Google Drive:", driveError);
+            console.log("   Usando armazenamento local como fallback");
+            caminhoArquivo = localFilePath;
+          }
+        } else {
+          // Google Drive não configurado, usar armazenamento local
+          caminhoArquivo = localFilePath;
+        }
+        
+        // Manter arquivo local para indexação
+        filePathForIndexing = localFilePath;
       } else if (req.body.caminho_arquivo) {
         // Se não há arquivo, usar o caminho fornecido (compatibilidade com API antiga)
         caminhoArquivo = req.body.caminho_arquivo;
@@ -82,14 +117,12 @@ export class DocumentController {
         });
       }
 
-      // TypeScript não consegue inferir que caminhoArquivo não é undefined aqui
-      // mas sabemos que é porque há um return acima se for undefined
       const data: CreateDocumentDto = {
         titulo,
         caminho_arquivo: caminhoArquivo!,
       };
 
-      const document = await this.service.createDocument(data, file?.path);
+      const document = await this.service.createDocument(data, filePathForIndexing);
 
       return res.status(201).json({
         message: "Documento criado com sucesso",
@@ -393,18 +426,90 @@ export class DocumentController {
         });
       }
 
-      const fs = require("fs");
-      const filePath = document.caminho_arquivo;
+      let filePath = document.caminho_arquivo;
+      let isGoogleDrive = false;
+      let googleDriveFileId: string | null = null;
 
-      // Verificar se o arquivo existe
+      // Verificar se o arquivo está no Google Drive
+      if (filePath.startsWith("gdrive:")) {
+        isGoogleDrive = true;
+        googleDriveFileId = filePath.replace("gdrive:", "");
+        console.log(`📁 Arquivo no Google Drive: ${googleDriveFileId}`);
+      } else {
+        // Arquivo local - construir caminho absoluto
+        if (!path.isAbsolute(filePath)) {
+          const documentsBasePath = process.env.DOCUMENTS_BASE_PATH || "./documents";
+          filePath = path.resolve(documentsBasePath, filePath);
+        }
+      }
+
+      // Se for Google Drive, fazer download
+      if (isGoogleDrive && googleDriveFileId) {
+        try {
+          const fileBuffer = await this.googleDriveService.downloadFile(googleDriveFileId);
+          
+          if (!fileBuffer) {
+            return res.status(404).json({
+              error: "Arquivo não encontrado no Google Drive",
+            });
+          }
+
+          // Obter link de visualização
+          const viewLink = await this.googleDriveService.getFileViewLink(googleDriveFileId);
+          
+          // Determinar tipo MIME
+          const ext = path.extname(document.titulo).toLowerCase();
+          let contentType = "application/octet-stream";
+          switch (ext) {
+            case ".pdf":
+              contentType = "application/pdf";
+              break;
+            case ".txt":
+              contentType = "text/plain";
+              break;
+            case ".md":
+              contentType = "text/markdown";
+              break;
+            case ".docx":
+              contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+              break;
+          }
+
+          // Enviar arquivo
+          res.setHeader("Content-Type", contentType);
+          res.setHeader(
+            "Content-Disposition",
+            `inline; filename="${document.titulo}"`
+          );
+          
+          // Se houver link de visualização, adicionar header customizado
+          if (viewLink) {
+            res.setHeader("X-Google-Drive-View-Link", viewLink);
+          }
+
+          return res.send(fileBuffer);
+        } catch (error: any) {
+          console.error("❌ Erro ao fazer download do Google Drive:", error);
+          return res.status(500).json({
+            error: "Erro ao buscar arquivo no Google Drive",
+            message: error.message,
+          });
+        }
+      }
+
+      // Arquivo local - verificar se existe
       if (!fs.existsSync(filePath)) {
+        console.error(`❌ Arquivo não encontrado: ${filePath}`);
+        console.error(`   Document ID: ${id}`);
+        console.error(`   Caminho no banco: ${document.caminho_arquivo}`);
+        
         return res.status(404).json({
           error: "Arquivo não encontrado no servidor",
+          message: `O arquivo não foi encontrado no caminho: ${filePath}. Isso pode acontecer após um redeploy no Render, pois o sistema de arquivos é efêmero.`,
         });
       }
 
       // Determinar o tipo MIME baseado na extensão
-      const path = require("path");
       const ext = path.extname(filePath).toLowerCase();
       let contentType = "application/octet-stream";
 
